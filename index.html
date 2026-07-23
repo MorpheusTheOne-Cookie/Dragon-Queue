@@ -28,7 +28,13 @@
                         <i class="fa-solid fa-key"></i>
                         <input type="password" name="password" placeholder="Password" required>
                     </div>
-                    <p><a href="#">Forgot Password</a></p>
+
+                    <div class="input-field" id = "confirm-password-field">
+                        <i class="fa-solid fa-key"></i>
+                        <input type="password" name="confirm-password" placeholder="Confirm Password" required>
+                    </div>
+
+                    <p id="ForgotPassword"><a href="#">Forgot Password</a></p>
                     
                 </div>
 
@@ -44,12 +50,16 @@
 let signUpBtn = document.getElementById("sign-up-btn");
 let signInBtn = document.getElementById("sign-in-btn");
 let usernameField = document.getElementById("username-field");
+let confirmPasswordField = document.getElementById("confirm-password-field");
 let title = document.getElementById("title");
+let forgotPassword = document.getElementById("ForgotPassword");
 
 
 
 signInBtn.onclick = function() {
     usernameField.style.maxHeight = "0";
+    confirmPasswordField.style.maxHeight = "0";
+    forgotPassword.style.display = "block";
     title.innerHTML = "Sign In";
     signUpBtn.classList.add("disable");
     signInBtn.classList.remove("disable");
@@ -57,6 +67,8 @@ signInBtn.onclick = function() {
 
 signUpBtn.onclick = function() {
     usernameField.style.maxHeight = "65px";
+    confirmPasswordField.style.maxHeight = "65px";
+    forgotPassword.style.display = "none";
     title.innerHTML = "Sign Up";
     signUpBtn.classList.remove("disable");
     signInBtn.classList.add("disable");
