@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -9,19 +10,137 @@
 
 
 </head>
+
 <body>
     <div class="container">
-        <div class="announcement">
-            <div class="annoucement-title">
-                <div class="icon-container">
-                    <i class="fa-solid fa-bullhorn"></i>
+
+        <div class="header">
+
+            <div class="header-title">
+
+                <h1>Recreational Queue</h1>
+
+                <div class="btn-field">
+
+                    <button type="button" id="dashboard-btn" name="Dashboard"> <i
+                            class="fa-solid fa-house"></i>Dashboard</button>
+                    <button type="button" id="rules-btn" class="disable" name="Rules"> <i
+                            class="fa-solid fa-file-lines"></i>Rules</button>
                 </div>
-                <h1>Dragon News</h1>
+
             </div>
 
-            <p>Welcome back everyone!</p>
-            
         </div>
+
+        <div class="dashboard" id="dashboard-Window">
+
+            <div class="row1">
+                <div class="announcement">
+                    <div class="annoucement-title">
+                        <div class="icon-container">
+                            <i class="fa-solid fa-bullhorn"></i>
+                        </div>
+                        <h1>Dragon News</h1>
+                    </div>
+
+                    <p>Welcome back everyone!</p>
+                </div>
+
+                <div class="profile">
+                    <div class="profile-title">
+                        <div class="icon-container">
+                            <i class="fa-solid fa-user"></i>
+                        </div>
+                        <h1>Profile</h1>
+                    </div>
+
+
+                </div>
+            </div>
+
+            <div class="row2">
+                <div class="pool-table-queue">
+                    <div class="pool-table-title">
+                        <div class="pool-icon-container">
+
+                        </div>
+
+                        <h1>Pool Table</h1>
+
+
+                    </div>
+
+
+                </div>
+
+                <div class="table-tennis-queue">
+                    <div class="table-tennis-title">
+                        <div class="table-tennis-icon-container">
+                            <i class="fa-solid fa-table-tennis-paddle-ball"></i>
+                        </div>
+
+                        <h1>Table Tennis</h1>
+                        <div class="table-tennis-information">
+                            <div class="current-game">
+                                <h2>Current game</h2>
+                            </div>
+
+                            <div class="people-waiting">
+                                <h2>People Waiting</h2>
+                            </div>
+
+                            <div class="est-waiting-time">
+                                <h2>Est Waiting Time</h2>
+                            </div>
+                        </div>
+
+                    </div>
+
+
+                </div>
+
+            </div>
+
+        </div>
+
+        <div class="rules hidden-rules" id="rules-Window">
+
+            <h1>Rules</h1>
+            <p>Here are the rules for the recreational queue.</p>
+
+            <div class="pool-table-rules">
+                <h2>Pool Table Rules</h2>
+                <p>Here are the specific rules for using the pool tables.</p>
+            </div>
+        </div>
+
     </div>
+
+    <script>
+        const dashboardBtn = document.getElementById("dashboard-btn");
+        const rulesBtn = document.getElementById("rules-btn");
+
+        const dashboardWindow = document.getElementById("dashboard-Window");
+        const rulesWindow = document.getElementById("rules-Window");
+
+        dashboardBtn.onclick = function () {
+            dashboardWindow.classList.remove("hidden-dashboard");
+            rulesWindow.classList.add("hidden-rules");
+
+            dashboardBtn.classList.remove("disable");
+            rulesBtn.classList.add("disable");
+        };
+
+        rulesBtn.onclick = function () {
+            dashboardWindow.classList.add("hidden-dashboard");
+            rulesWindow.classList.remove("hidden-rules");
+
+            dashboardBtn.classList.add("disable");
+            rulesBtn.classList.remove("disable");
+        };
+
+    </script>
+
 </body>
+
 </html>

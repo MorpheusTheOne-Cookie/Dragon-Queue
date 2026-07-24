@@ -1,26 +1,159 @@
-*{
+* {
     margin: 0;
     padding: 0;
     font-family: "Poppins", sans-serif;
     box-sizing: border-box;
 }
 
-body{
+body {
     min-height: 100vh;
 }
 
-.container{
+.container {
     width: 100%;
     min-height: 100vh;
 
-    background-image: linear-gradient(rgba(0, 0, 50, 0.8), rgba(0, 0, 50, 0.8)), url();
+    background-image: linear-gradient(rgba(234, 234, 244, 0.8), rgba(234, 234, 244, 0.8)), url();
     background-position: center;
     background-size: cover;
-    
+
     position: relative;
 }
 
-.icon-container{
+.header-title {
+    display: flex;
+    align-items: center;
+    gap: 205px;
+}
+
+.header {
+    width: 100%;
+    max-width: 2050px;
+
+    border-radius: 10px;
+    position: absolute;
+    top: 4%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+
+    background: #fff;
+    padding: 20px 40px;
+}
+
+.btn-field {
+    width: 30%;
+    max-width: 450px;
+    gap: 75%;
+
+    display: flex;
+    justify-content: space-between;
+}
+
+.btn-field button {
+    /* flex-basis: 30%; */
+    background: #32a0e5;
+    height: 40px;
+    /* width: 1000px; */
+
+    border: 0;
+    outline: 0;
+    padding: 0 20px;
+    border-radius: 20px;
+
+
+    color: #ffffff;
+    font-size: 15px;
+    font-weight: 600;
+    font-family: "Poppins", sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+
+    cursor: pointer;
+    transition: 0.3s;
+}
+
+.btn-field button:hover {
+    background: #167fc1;
+    transform: translateY(-2px);
+}
+
+.btn-field button.disable:hover {
+    background: #eeeeee;
+    color: #222222;
+}
+
+.btn-field button.disable {
+    background: #fff;
+    color: #555;
+    font-weight: 500;
+}
+
+.dashboard {
+    max-height: 1200px;
+    overflow: hidden;
+    opacity: 1;
+    transition: max-height 0.4s ease, opacity 0.3s ease;
+
+}
+
+.row1 {
+    padding: 120px 40px 40px;
+
+    display: flex;
+    flex-direction: row;
+    gap: 420px;
+
+}
+
+.row2 {
+    padding: 120px 40px 40px;
+
+    display: flex;
+    flex-direction: row;
+    gap: 420px;
+}
+
+.dashboard.hidden-dashboard {
+    max-height: 0;
+    opacity: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    pointer-events: none;
+}
+
+.annoucement-title {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    margin-bottom: 20px;
+}
+
+.announcement,
+.profile,
+.pool-table-queue,
+.table-tennis-queue {
+    width: 90%;
+    max-width: 900px;
+
+    /* margin: 0; */
+
+    border-radius: 15px;
+    background: #ffffff;
+    padding: 30px 40px;
+
+    overflow: hidden;
+}
+
+.announcement h1 {
+    font-size: 30px;
+    text-transform: uppercase;
+    /* margin-bottom: 40px; */
+    color: #007ba0;
+    /* position:relative; */
+    /* text-align: left; */
+}
+
+.icon-container {
     width: 9%;
     min-height: 4vh;
 
@@ -31,28 +164,23 @@ body{
     border-radius: 10%;
 }
 
-.announcement{
-    width: 90%;
-    max-width: 450px;
-    
-    border-radius: 15px;
-    position: absolute;
-    top: 22%;
-    left: 15%;
-    transform: translate(-50%, -50%);
-    
-    background: #fff;
-    padding: 30px 40px;
+.icon-container i,
+.icon-container svg {
+    font-size: 20px;
+    color: #077191;
+    /* 
+    padding: 10px;
+    border-radius: 10%; */
 }
 
-.annoucement-title{
+.profile-title {
     display: flex;
     align-items: center;
     gap: 15px;
     margin-bottom: 20px;
 }
 
-.announcement h1{
+.profile h1 {
     font-size: 30px;
     text-transform: uppercase;
     /* margin-bottom: 40px; */
@@ -61,10 +189,88 @@ body{
     /* text-align: left; */
 }
 
-.icon-container i, .icon-container svg{
+.pool-table-title{
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    margin-bottom: 20px;
+}
+
+.pool-table-queue h1 {
+    font-size: 30px;
+    text-transform: uppercase;
+    color: #007ba0;
+}
+
+.pool-icon-container i,
+.pool-icon-container svg {
     font-size: 20px;
     color: #077191;
-/* 
-    padding: 10px;
-    border-radius: 10%; */
+}
+
+.table-tennis-title{
+    display: flex;
+    align-items: center;
+    gap: 1px;
+    margin-bottom: 20px;
+}
+
+.table-tennis-queue h1 {
+    font-size: 30px;
+    text-transform: uppercase;
+    transform: translate(0, -60%);
+    color: #007ba0;
+}
+
+.table-tennis-icon-container {
+    width: 9%;
+    min-height: 4vh;
+
+    padding: 15px 50px;
+    transform: translate(-20%);
+
+    background-color: #2f8cff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 10%;
+}
+
+.table-tennis-icon-container i,
+.table-tennis-icon-container svg {
+    font-size: 50px;
+    color: #cbf3ff;
+}
+
+.rules {
+    max-height: 350px;
+    overflow: hidden;
+    opacity: 1;
+
+    margin-top: 90px;
+    margin-left: 40px;
+
+    transition: max-height 0.4s, opacity 0.3s;
+    ;
+}
+
+.rules.hidden-rules {
+    max-height: 0;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.pool-table-rules {
+    width: 90%;
+    max-width: 450px;
+
+    margin-left: 20px;
+    margin-top: 20px;
+
+    border-radius: 15px;
+
+    background: #fff;
+    padding: 30px 40px;
+
+    overflow: hidden;
 }
