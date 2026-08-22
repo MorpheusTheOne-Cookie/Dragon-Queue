@@ -4,175 +4,391 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Recreational Queue</title>
+
+    <title>Dashboard | Dragon Queue</title>
+
+    <!-- Main stylesheet for the Dragon Queue dashboard. -->
     <link rel="stylesheet" href="mainPageStyle.css">
+
+    <!-- Font Awesome icons. -->
     <script src="https://kit.fontawesome.com/61b297af10.js" crossorigin="anonymous"></script>
-
-
 </head>
 
 <body>
+
+    <!-- Main wrapper for the whole page. -->
     <div class="container">
 
+        <!-- ==================================================
+             HEADER
+             ================================================== -->
         <div class="header">
 
             <div class="header-title">
 
-                <h1>Recreational Queue</h1>
+                <!-- Dragon Queue branding. -->
+                <div class="branding">
+                    <!-- Replace this placeholder with the official Bethune logo when available. -->
+                    <img src="IMG/Bethune Logo-PLACEHOLDER.png" alt="Bethune Logo">
+                    <h1>Dragon Queue</h1>
+                </div>
 
+
+                <!-- Main navigation buttons. -->
                 <div class="btn-field">
 
-                    <button type="button" id="dashboard-btn" name="Dashboard"> <i
-                            class="fa-solid fa-house"></i>Dashboard</button>
-                    <button type="button" id="rules-btn" class="disable" name="Rules"> <i
-                            class="fa-solid fa-file-lines"></i>Rules</button>
+                    <button type="button" id="dashboard-btn" name="Dashboard">
+                        <i class="fa-solid fa-house"></i>
+                        Dashboard
+                    </button>
+
+                    <button type="button" id="rules-btn" class="disable" name="Rules">
+                        <i class="fa-solid fa-file-lines"></i>
+                        Rules
+                    </button>
+
+                </div>
+
+
+                <!-- Signed-in user information. -->
+                <div class="header_user">
+
+                    <!-- JavaScript inserts the user's initials here. -->
+                    <div class="avatar" id="user_avatar"></div>
+
+                    <div>
+                        <!-- JavaScript inserts the username and role here. -->
+                        <p id="Username"></p>
+                        <span id="Role"></span>
+                    </div>
+
+                    <button type="button" id="logout-btn">Logout</button>
+
                 </div>
 
             </div>
 
         </div>
 
+
+        <!-- ==================================================
+             DASHBOARD
+             ================================================== -->
         <div class="dashboard" id="dashboard-Window">
 
-            <div class="row1">
-                <div class="announcement">
-                    <div class="annoucement-title">
-                        <div class="icon-container">
-                            <i class="fa-solid fa-bullhorn"></i>
-                        </div>
-                        <h1>Dragon News</h1>
-                    </div>
+            <!-- Green banner.
+                 JavaScript only shows this when the signed-in user
+                 reaches the front of one of the queues. -->
+            <div class="turn-banner hidden-dashboard" id="turn-banner">
 
-                    <p>Welcome back everyone!</p>
-                </div>
+                <h1 id="turn-title">YOUR TURN IS UP!!!</h1>
 
-                <div class="profile">
-                    <div class="profile-title">
-                        <div class="icon-container">
-                            <i class="fa-solid fa-user"></i>
-                        </div>
-                        <h1>Profile</h1>
-                    </div>
+                <!-- JavaScript inserts the station-specific turn message here. -->
+                <p id="turn-text"></p>
 
-
-                </div>
             </div>
 
-            <div class="row2">
-                <div class="pool-table-queue">
-                    <div class="pool-table-title">
-                        <div class="pool-icon-container">
 
+            <!-- Orange strip showing the latest Dragon News item. -->
+            <div class="notice">
+
+                <div class="notice-icon">
+                    <i class="fa-solid fa-bullhorn"></i>
+                </div>
+
+                <div>
+                    <h2 id="notice-title">Dragon News</h2>
+
+                    <!-- Replaced by JavaScript after the news data loads. -->
+                    <p id="notice-text">Loading the latest news...</p>
+                </div>
+
+            </div>
+
+
+            <!-- ==================================================
+                 MAIN DASHBOARD CARDS
+                 Pool, Table Tennis and Profile
+                 ================================================== -->
+            <div class="card-row">
+
+                <!-- ==============================================
+                     POOL TABLE CARD
+                     ============================================== -->
+                <div class="station-card pool-table-queue">
+
+                    <!-- Blue Pool Table header. -->
+                    <div class="card-head pool-head">
+
+                        <div class="pool-icon-container">
+                            <i class="fa-solid fa-circle"></i>
                         </div>
 
-                        <h1>Pool Table</h1>
+                        <div>
+                            <h1>Pool Table</h1>
 
+                            <!-- JavaScript updates this with the current station status. -->
+                            <p id="queue-length">Nobody is playing</p>
+                        </div>
 
                     </div>
 
 
+                    <!-- Pool Table queue details. -->
+                    <div class="card-details pool">
+
+                        <!-- Current position. -->
+                        <div class="details pool">
+
+                            <div class="detail-icon pool-icon">
+                                <i class="fa-solid fa-user"></i>
+                            </div>
+
+                            <span>Current Position</span>
+
+                            <!-- JavaScript changes this when the user joins/leaves. -->
+                            <strong id="pool-position">-</strong>
+
+                        </div>
+
+
+                        <!-- Estimated waiting time. -->
+                        <div class="details pool">
+
+                            <div class="detail-icon pool-icon">
+                                <i class="fa-solid fa-clock"></i>
+                            </div>
+
+                            <span>Est Wait Time</span>
+
+                            <strong id="pool-est-wait">0 min</strong>
+
+                        </div>
+
+
+                        <!-- Number of people waiting. -->
+                        <div class="details pool">
+
+                            <div class="detail-icon pool-icon">
+                                <i class="fa-solid fa-user-group"></i>
+                            </div>
+
+                            <span>People Waiting</span>
+
+                            <strong id="pool-waiting">0</strong>
+
+                        </div>
+
+                    </div>
+
+
+                    <!-- Pool Table actions. -->
+                    <div class="pool-table-queue-button">
+
+                        <!-- JavaScript changes this between Join Queue and Leave Queue. -->
+                        <button type="button" id="pool-queue-btn">
+                            Join Queue
+                        </button>
+
+                        <button type="button" class="ghost" id="pool-view-queue-btn">
+                            View Queue
+                        </button>
+
+                    </div>
+
                 </div>
 
-                <div class="table-tennis-queue">
-                    <div class="table-tennis-title">
+
+                <!-- ==============================================
+                     TABLE TENNIS CARD
+                     ============================================== -->
+                <div class="station-card table-tennis-queue">
+
+                    <!-- Orange Table Tennis header. -->
+                    <div class="card-head table-tennis-head">
+
                         <div class="table-tennis-icon-container">
                             <i class="fa-solid fa-table-tennis-paddle-ball"></i>
                         </div>
 
-                        <h1>Table Tennis</h1>
-                        <div class="table-tennis-information">
-                            <div class="current-game">
-                                <h2>Current game</h2>
-                                <p>BABY SHARK VS HAPPY SHARK</p>
-                            </div>
+                        <div>
+                            <h1>Table Tennis</h1>
 
-                            <div class="people-waiting">
-                                <h2>People Waiting</h2>
-                                <p>0</p>
-                            </div>
-
-                            <div class="est-waiting-time">
-                                <h2>Est Waiting Time</h2>
-                                <p>0 mins</p>
-                            </div>
+                            <!-- JavaScript updates this with the current station status. -->
+                            <p id="queue-length">Nobody is playing</p>
                         </div>
 
                     </div>
 
-                    <div class="table-tennis-queue-info">
-                        <div class="table-tennis-queue-preview">
-                            <h2>Queue</h2>
-                            <!-- Add like a (0) after the queue to represent the number of ppl in queue -->
-                            <div class="table-tennis-short-queue-list">
-                                <div class="short-queue-player">
-                                    <span>1</span>
-                                    <p>Anthony</p>
-                                </div>
 
-                                <div class="short-queue-player">
-                                    <span>2</span>
-                                    <p>Soyuz</p>
-                                </div>
+                    <!-- Table Tennis queue details. -->
+                    <div class="card-details table-tennis">
 
+                        <!-- Current position. -->
+                        <div class="details table-tennis">
 
-                                <div class="short-queue-player">
-                                    <span>3</span>
-                                    <p>Player 3</p>
-                                </div>
+                            <div class="detail-icon table-tennis-icon">
+                                <i class="fa-solid fa-user"></i>
                             </div>
+
+                            <span>Current Position</span>
+
+                            <strong id="table-tennis-position">-</strong>
+
                         </div>
 
 
-                        <div class="table-tennis-queue-button">
-                            <button type="button" id= "table-tennis-join_leave-queue-btn"> Join Queue</button> <!-- To join and leave queue -->
-                            <button type="button" id= "table-tennis-view-queue-btn"> View Full Queue</button>
+                        <!-- Estimated waiting time. -->
+                        <div class="details table-tennis">
+
+                            <div class="detail-icon table-tennis-icon">
+                                <i class="fa-solid fa-clock"></i>
+                            </div>
+
+                            <span>Est Wait Time</span>
+
+                            <strong id="table-tennis-est-wait">0 min</strong>
+
                         </div>
+
+
+                        <!-- Number of people waiting. -->
+                        <div class="details table-tennis">
+
+                            <div class="detail-icon table-tennis-icon">
+                                <i class="fa-solid fa-user-group"></i>
+                            </div>
+
+                            <span>People Waiting</span>
+
+                            <strong id="table-tennis-waiting">0</strong>
+
+                        </div>
+
                     </div>
 
+
+                    <!-- Table Tennis actions. -->
+                    <div class="table-tennis-queue-button">
+
+                        <!-- JavaScript changes this between Join Queue and Leave Queue. -->
+                        <button type="button" id="table-tennis-queue-btn">
+                            Join Queue
+                        </button>
+
+                        <button type="button" class="ghost" id="table-tennis-view-queue-btn">
+                            View Queue
+                        </button>
+
+                    </div>
+
+                </div>
+
+
+                <!-- ==============================================
+                     PROFILE CARD
+                     ============================================== -->
+                <div class="profile">
+
+                    <!-- Top portion of the profile card. -->
+                    <div class="profile-top">
+
+                        <!-- JavaScript inserts the signed-in user's initials here. -->
+                        <div class="profile-avatar" id="profile-avatar"></div>
+
+                        <div class="profile-info">
+
+                            <!-- JavaScript inserts the username here. -->
+                            <h1 id="profile-username"></h1>
+
+                            <!-- JavaScript inserts the user's role here. -->
+                            <span id="profile-role">Role</span>
+
+                        </div>
+
+                    </div>
+
+
+                    <!-- JavaScript inserts Games Played, Pool Wins and
+                         Table Tennis Wins into this container. -->
+                    <div id="profile-body"></div>
 
                 </div>
 
             </div>
 
+
+            <!-- ==================================================
+                 DRAGON NEWS
+                 Kept outside card-row so it can span the dashboard
+                 instead of becoming a fourth grid card.
+                 ================================================== -->
+            <div class="announcement">
+
+                <div class="announcement-title">
+
+                    <div class="icon-container">
+                        <i class="fa-solid fa-bullhorn"></i>
+                    </div>
+
+                    <h1>Dragon News</h1>
+
+                </div>
+
+
+                <!-- JavaScript creates the complete dated news list here. -->
+                <div id="news-list"></div>
+
+            </div>
+
         </div>
 
+
+        <!-- ==================================================
+             RULES WINDOW
+             This must stay outside dashboard-Window.
+             Otherwise hiding the dashboard would also hide Rules.
+             ================================================== -->
         <div class="rules hidden-rules" id="rules-Window">
 
             <h1>Rules</h1>
-            <p>Here are the rules for the recreational queue.</p>
 
-            <div class="pool-table-rules">
-                <h2>Pool Table Rules</h2>
-                <p>Here are the specific rules for using the pool tables.</p>
-            </div>
+            <p>Try to follow the rules at all times.</p>
+
+            <!-- JavaScript fills this with the rules from app.js. -->
+            <div id="rules-bdy"></div>
+
+        </div>
+
+
+        <!-- ==================================================
+             FULL QUEUE WINDOW
+             Also outside dashboard-Window so it can be shown by itself.
+             ================================================== -->
+        <div class="full-queue hidden-queue" id="queue-Window">
+
+            <!-- JavaScript changes this to Pool Table or Table Tennis. -->
+            <h1 id="full-queue-title">Full Queue</h1>
+
+            <!-- JavaScript builds the complete queue here. -->
+            <div id="queue-list"></div>
+
+            <button type="button" id="back-btn">
+                Back to Dashboard
+            </button>
+
         </div>
 
     </div>
 
-    <script>
-        const dashboardBtn = document.getElementById("dashboard-btn");
-        const rulesBtn = document.getElementById("rules-btn");
 
-        const dashboardWindow = document.getElementById("dashboard-Window");
-        const rulesWindow = document.getElementById("rules-Window");
+    <!-- app.js must load first because mainPageScript.js uses functions and
+         data such as loadData(), queueFor(), stationById(), queueAction(),
+         news, rules and stats from it. -->
+    <script src="app.js"></script>
 
-        dashboardBtn.onclick = function () {
-            dashboardWindow.classList.remove("hidden-dashboard");
-            rulesWindow.classList.add("hidden-rules");
-
-            dashboardBtn.classList.remove("disable");
-            rulesBtn.classList.add("disable");
-        };
-
-        rulesBtn.onclick = function () {
-            dashboardWindow.classList.add("hidden-dashboard");
-            rulesWindow.classList.remove("hidden-rules");
-
-            dashboardBtn.classList.add("disable");
-            rulesBtn.classList.remove("disable");
-        };
-
-    </script>
+    <!-- Page-specific JavaScript. -->
+    <script src="mainPageScript.js"></script>
 
 </body>
 
