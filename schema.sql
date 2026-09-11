@@ -193,3 +193,33 @@ ON DUPLICATE KEY UPDATE
 
     rule_order =
         VALUES(rule_order);
+
+-- ------------------------------------------------------------
+-- Roles (kept separate from users for safer permissions)
+-- ------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS user_roles (
+    user_id INT PRIMARY KEY,
+    role ENUM('student', 'temp_admin', 'main_admin') NOT NULL DEFAULT 'student',
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+INSERT IGNORE INTO user_roles (user_id, role)
+SELECT id, 'student' FROM users;
+
+-- Dragons can manage queues and record results, but cannot manage roles.
+INSERT INTO user_roles (user_id, role)
+SELECT id, 'temp_admin' FROM users WHERE username = 'Dragons'
+ON DUPLICATE KEY UPDATE role = 'temp_admin';
+
+-- ------------------------------------------------------------
+-- Server-managed login sessions
+-- ------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS user_sessions (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    token_hash CHAR(64) NOT NULL UNIQUE,
+    user_id INT NOT NULL,
+    expires_at DATETIME NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    KEY session_expiry (expires_at),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
