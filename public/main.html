@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Dashboard | Dragon Queue</title>
+
+    <link rel="stylesheet" href="mainPageStyle.css">
+
+    <script src="https://kit.fontawesome.com/61b297af10.js" crossorigin="anonymous"></script>
+</head>
+
+<body>
+
+    <div class="container">
+
+
+        <!-- ==================================================
+             HEADER
+             ================================================== -->
+
+        <div class="header">
+
+            <div class="header-title">
+
+                <div class="branding">
+                    <img src="IMG/Bethune Logo-PLACEHOLDER.png" alt="Bethune Logo">
+                    <h1>Dragon Queue</h1>
+                </div>
+
+
+                <div class="btn-field">
+
+                    <button type="button" id="dashboard-btn" name="Dashboard">
+                        <i class="fa-solid fa-house"></i>
+                        Dashboard
+                    </button>
+
+                    <button type="button" id="rules-btn" class="disable" name="Rules">
+                        <i class="fa-solid fa-file-lines"></i>
+                        Rules
+                    </button>
+
+                </div>
+
+
+                <div class="header_user">
+
+                    <div class="avatar" id="user_avatar"></div>
+
+                    <div>
+                        <p id="Username"></p>
+                        <span id="Role"></span>
+                    </div>
+
+                    <button type="button" id="logout-btn">
+                        Logout
+                    </button>
+
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <!-- ==================================================
+             DASHBOARD
+             ================================================== -->
+
+        <div class="dashboard" id="dashboard-Window">
+
+            <div class="turn-banner hidden-dashboard" id="turn-banner">
+
+                <h1 id="turn-title">
+                    YOUR TURN IS UP!!!
+                </h1>
+
+                <p id="turn-text"></p>
+
+            </div>
+
+
+            <div class="notice">
+
+                <div class="notice-icon">
+                    <i class="fa-solid fa-bullhorn"></i>
+                </div>
+
+                <div>
+
+                    <h2 id="notice-title">
+                        Dragon News
+                    </h2>
+
+                    <p id="notice-text">
+                        Loading the latest news...
+                    </p>
+
+                </div>
+
+            </div>
+
+
+            <!-- ==================================================
+                 MAIN DASHBOARD CARDS
+                 ================================================== -->
+
+            <div class="card-row">
+
+
+                <!-- ==================================================
+                     POOL TABLE CARD
+                     ================================================== -->
+
+                <div class="station-card pool-table-queue">
+
+                    <div class="card-head pool-head">
+
+                        <div class="pool-icon-container">
+                            <i class="fa-solid fa-circle"></i>
+                        </div>
+
+                        <div>
+
+                            <h1>
+                                Pool Table
+                            </h1>
+
+                            <p id="pool-current-player">
+                                Nobody is playing
+                            </p>
+
+                        </div>
+
+                    </div>
+
+
+                    <div class="card-details pool">
+
+                        <div class="details pool">
+
+                            <div class="detail-icon pool-icon">
+                                <i class="fa-solid fa-user"></i>
+                            </div>
+
+                            <span>
+                                Current Position
+                            </span>
+
+                            <strong id="pool-position">
+                                -
+                            </strong>
+
+                        </div>
+
+
+                        <div class="details pool">
+
+                            <div class="detail-icon pool-icon">
+                                <i class="fa-solid fa-clock"></i>
+                            </div>
+
+                            <span>
+                                Est Wait Time
+                            </span>
+
+                            <strong id="pool-est-wait">
+                                0 min
+                            </strong>
+
+                        </div>
+
+
+                        <div class="details pool">
+
+                            <div class="detail-icon pool-icon">
+                                <i class="fa-solid fa-user-group"></i>
+                            </div>
+
+                            <span>
+                                People Waiting
+                            </span>
+
+                            <strong id="pool-waiting">
+                                0
+                            </strong>
+
+                        </div>
+
+                    </div>
+
+
+                    <div class="pool-table-queue-button">
+
+                        <button type="button" id="pool-queue-btn">
+                            Join Queue
+                        </button>
+
+                        <button
+                            type="button"
+                            class="ghost"
+                            id="pool-view-queue-btn"
+                        >
+                            View Queue
+                        </button>
+
+                    </div>
+
+                </div>
+
+
+                <!-- ==================================================
+                     TABLE TENNIS CARD
+                     ================================================== -->
+
+                <div class="station-card table-tennis-queue">
+
+                    <div class="card-head table-tennis-head">
+
+                        <div class="table-tennis-icon-container">
+                            <i class="fa-solid fa-table-tennis-paddle-ball"></i>
+                        </div>
+
+                        <div>
+
+                            <h1>
+                                Table Tennis
+                            </h1>
+
+                            <p id="table-tennis-current-player">
+                                Nobody is playing
+                            </p>
+
+                        </div>
+
+                    </div>
+
+
+                    <div class="card-details table-tennis">
+
+                        <div class="details table-tennis">
+
+                            <div class="detail-icon table-tennis-icon">
+                                <i class="fa-solid fa-user"></i>
+                            </div>
+
+                            <span>
+                                Current Position
+                            </span>
+
+                            <strong id="table-tennis-position">
+                                -
+                            </strong>
+
+                        </div>
+
+
+                        <div class="details table-tennis">
+
+                            <div class="detail-icon table-tennis-icon">
+                                <i class="fa-solid fa-clock"></i>
+                            </div>
+
+                            <span>
+                                Est Wait Time
+                            </span>
+
+                            <strong id="table-tennis-est-wait">
+                                0 min
+                            </strong>
+
+                        </div>
+
+
+                        <div class="details table-tennis">
+
+                            <div class="detail-icon table-tennis-icon">
+                                <i class="fa-solid fa-user-group"></i>
+                            </div>
+
+                            <span>
+                                People Waiting
+                            </span>
+
+                            <strong id="table-tennis-waiting">
+                                0
+                            </strong>
+
+                        </div>
+
+                    </div>
+
+
+                    <div class="table-tennis-queue-button">
+
+                        <button type="button" id="table-tennis-queue-btn">
+                            Join Queue
+                        </button>
+
+                        <button
+                            type="button"
+                            class="ghost"
+                            id="table-tennis-view-queue-btn"
+                        >
+                            View Queue
+                        </button>
+
+                    </div>
+
+                </div>
+
+
+                <!-- ==================================================
+                     PROFILE CARD
+                     ================================================== -->
+
+                <div class="profile">
+
+                    <div class="profile-top">
+
+                        <div
+                            class="profile-avatar"
+                            id="profile-avatar"
+                        ></div>
+
+                        <div class="profile-info">
+
+                            <h1 id="profile-username"></h1>
+
+                            <span id="profile-role">
+                                Role
+                            </span>
+
+                        </div>
+
+                    </div>
+
+
+                    <div id="profile-body"></div>
+
+                </div>
+
+            </div>
+
+
+            <!-- ==================================================
+                 DRAGON NEWS
+                 ================================================== -->
+
+            <div class="announcement">
+
+                <div class="announcement-title">
+
+                    <div class="icon-container">
+                        <i class="fa-solid fa-bullhorn"></i>
+                    </div>
+
+                    <h1>
+                        Dragon News
+                    </h1>
+
+                </div>
+
+
+                <div id="news-list"></div>
+
+            </div>
+
+        </div>
+
+
+        <!-- ==================================================
+             RULES WINDOW
+             ================================================== -->
+
+        <div
+            class="rules hidden-rules"
+            id="rules-Window"
+        >
+
+            <h1>
+                Rules
+            </h1>
+
+            <p>
+                Try to follow the rules at all times.
+            </p>
+
+            <div id="rules-bdy"></div>
+
+        </div>
+
+
+        <!-- ==================================================
+             FULL QUEUE WINDOW
+             ================================================== -->
+
+        <div
+            class="full-queue hidden-queue"
+            id="queue-Window"
+        >
+
+            <h1 id="full-queue-title">
+                Full Queue
+            </h1>
+
+            <div id="queue-list"></div>
+
+            <button
+                type="button"
+                id="back-btn"
+            >
+                Back to Dashboard
+            </button>
+
+        </div>
+
+    </div>
+
+
+    <!-- ==================================================
+         JAVASCRIPT
+         ================================================== -->
+
+    <script src="app.js"></script>
+
+    <script src="mainPageScript.js"></script>
+
+</body>
+
+</html>

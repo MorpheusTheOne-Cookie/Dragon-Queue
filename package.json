@@ -1,0 +1,27 @@
+{
+  "name": "dragon-queue",
+  "version": "1.0.0",
+  "description": "First Attempt at using Node JS on Dragon Queue",
+  "homepage": "https://github.com/MorpheusTheOne-Cookie/Dragon-Queue#readme",
+  "bugs": {
+    "url": "https://github.com/MorpheusTheOne-Cookie/Dragon-Queue/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MorpheusTheOne-Cookie/Dragon-Queue.git"
+  },
+  "license": "ISC",
+  "author": "",
+  "type": "commonjs",
+  "main": "mainPageScript.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node server.js"
+  },
+  "keywords": [],
+  "dependencies": {
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "mysql2": "^3.24.4"
+  }
+}

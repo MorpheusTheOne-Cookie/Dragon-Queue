@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>Sign In | Dragon Queue</title>
+
+    <link
+        rel="stylesheet"
+        href="registerStyle.css"
+    >
+
+    <script
+        src="https://kit.fontawesome.com/61b297af10.js"
+        crossorigin="anonymous">
+    </script>
+</head>
+
+
+<body>
+
+    <div class="container">
+
+        <div class="form-box">
+
+            <img
+                src="IMG/Bethune Logo-PLACEHOLDER.png"
+                alt="Dragon Queue logo"
+            >
+
+            <h1 id="title">
+                Register
+            </h1>
+
+
+            <form>
+
+                <div class="input-group">
+
+
+                    <div
+                        class="input-field"
+                        id="username-field"
+                    >
+
+                        <i class="fa-solid fa-user"></i>
+
+                        <input
+                            type="text"
+                            id="username"
+                            name="username"
+                            placeholder="Username"
+                            autocomplete="username"
+                        >
+
+                    </div>
+
+
+                    <div class="input-field">
+
+                        <i class="fa-solid fa-envelope"></i>
+
+                        <input
+                            type="email"
+                            id="email"
+                            name="email"
+                            placeholder="Email"
+                            autocomplete="email"
+                        >
+
+                    </div>
+
+
+                    <div class="input-field">
+
+                        <i class="fa-solid fa-key"></i>
+
+                        <input
+                            type="password"
+                            id="password"
+                            name="password"
+                            placeholder="Password"
+                            autocomplete="new-password"
+                        >
+
+                    </div>
+
+
+                    <div
+                        class="input-field"
+                        id="confirm-password-field"
+                    >
+
+                        <i class="fa-solid fa-key"></i>
+
+                        <input
+                            type="password"
+                            id="confirm-password"
+                            name="confirm-password"
+                            placeholder="Confirm Password"
+                            autocomplete="new-password"
+                        >
+
+                    </div>
+
+
+                    <p
+                        id="ForgotPassword"
+                        class="hidden"
+                    >
+
+                        <a href="#">
+                            Forgot Password
+                        </a>
+
+                    </p>
+
+                </div>
+
+
+                <div class="btn-field">
+
+                    <button
+                        type="button"
+                        id="sign-up-btn"
+                    >
+                        Register
+                    </button>
+
+
+                    <button
+                        type="button"
+                        id="sign-in-btn"
+                        class="disable"
+                    >
+                        Login
+                    </button>
+
+
+                    <button
+                        type="button"
+                        id="main-page-btn"
+                        class="submit-btn"
+                    >
+                        Create Account
+                    </button>
+
+                </div>
+
+
+                <p
+                    class="message"
+                    id="message"
+                ></p>
+
+            </form>
+
+        </div>
+
+    </div>
+
+
+    <script>
+
+
+        // ==========================================================
+        // HTML ELEMENTS
+        // ==========================================================
+
+        const signUpBtn =
+            document.getElementById(
+                "sign-up-btn"
+            );
+
+        const signInBtn =
+            document.getElementById(
+                "sign-in-btn"
+            );
+
+        const usernameField =
+            document.getElementById(
+                "username-field"
+            );
+
+        const confirmPasswordField =
+            document.getElementById(
+                "confirm-password-field"
+            );
+
+        const usernameInput =
+            document.getElementById(
+                "username"
+            );
+
+        const emailInput =
+            document.getElementById(
+                "email"
+            );
+
+        const passwordInput =
+            document.getElementById(
+                "password"
+            );
+
+        const confirmPasswordInput =
+            document.getElementById(
+                "confirm-password"
+            );
+
+        const title =
+            document.getElementById(
+                "title"
+            );
+
+        const forgotPassword =
+            document.getElementById(
+                "ForgotPassword"
+            );
+
+        const mainPageBtn =
+            document.getElementById(
+                "main-page-btn"
+            );
+
+        const message =
+            document.getElementById(
+                "message"
+            );
+
+
+        // ==========================================================
+        // FORM MODE
+        // ==========================================================
+
+        let mode =
+            "register";
+
+
+        // ==========================================================
+        // LOGIN MODE
+        // ==========================================================
+
+        signInBtn.onclick =
+            function () {
+
+                mode =
+                    "login";
+
+
+                usernameField.style.maxHeight =
+                    "0";
+
+
+                confirmPasswordField.style.maxHeight =
+                    "0";
+
+
+                forgotPassword.style.display =
+                    "block";
+
+
+                title.textContent =
+                    "Login";
+
+
+                mainPageBtn.textContent =
+                    "Login";
+
+
+                signUpBtn.classList.add(
+                    "disable"
+                );
+
+
+                signInBtn.classList.remove(
+                    "disable"
+                );
+
+
+                passwordInput.setAttribute(
+                    "autocomplete",
+                    "current-password"
+                );
+
+
+                message.textContent =
+                    "";
+            };
+
+
+        // ==========================================================
+        // REGISTER MODE
+        // ==========================================================
+
+        signUpBtn.onclick =
+            function () {
+
+                mode =
+                    "register";
+
+
+                usernameField.style.maxHeight =
+                    "65px";
+
+
+                confirmPasswordField.style.maxHeight =
+                    "65px";
+
+
+                forgotPassword.style.display =
+                    "none";
+
+
+                title.textContent =
+                    "Register";
+
+
+                mainPageBtn.textContent =
+                    "Create Account";
+
+
+                signUpBtn.classList.remove(
+                    "disable"
+                );
+
+
+                signInBtn.classList.add(
+                    "disable"
+                );
+
+
+                passwordInput.setAttribute(
+                    "autocomplete",
+                    "new-password"
+                );
+
+
+                message.textContent =
+                    "";
+            };
+
+
+        // ==========================================================
+        // LOGIN OR REGISTER
+        // ==========================================================
+
+        mainPageBtn.onclick =
+            async function () {
+
+                const username =
+                    usernameInput.value.trim();
+
+
+                const email =
+                    emailInput.value
+                        .trim()
+                        .toLowerCase();
+
+
+                const password =
+                    passwordInput.value;
+
+
+                const confirmPassword =
+                    confirmPasswordInput.value;
+
+
+                message.textContent =
+                    "";
+
+
+                if (
+                    email === "" ||
+                    password === ""
+                ) {
+
+                    message.textContent =
+                        "Please fill in your email and password.";
+
+                    return;
+                }
+
+
+                if (
+                    password.length < 8
+                ) {
+
+                    message.textContent =
+                        "Your password must contain at least 8 characters.";
+
+                    return;
+                }
+
+
+                if (
+                    mode === "register" &&
+                    username === ""
+                ) {
+
+                    message.textContent =
+                        "Please choose a username.";
+
+                    return;
+                }
+
+
+                if (
+                    mode === "register" &&
+                    password !== confirmPassword
+                ) {
+
+                    message.textContent =
+                        "The two passwords are not the same.";
+
+                    return;
+                }
+
+
+                mainPageBtn.disabled =
+                    true;
+
+
+                mainPageBtn.textContent =
+                    mode === "register"
+                        ? "Creating Account..."
+                        : "Logging In...";
+
+
+                const result =
+                    await postJson(
+                        "/api/login",
+                        {
+
+                            username:
+                                username,
+
+                            email:
+                                email,
+
+                            password:
+                                password,
+
+                            mode:
+                                mode
+
+                        }
+                    );
+
+
+                mainPageBtn.disabled =
+                    false;
+
+
+                mainPageBtn.textContent =
+                    mode === "register"
+                        ? "Create Account"
+                        : "Login";
+
+
+                if (
+                    !result.ok
+                ) {
+
+                    message.textContent =
+                        result.message;
+
+                    return;
+                }
+
+
+                localStorage.setItem(
+                    "dragon-user",
+                    JSON.stringify(
+                        result.data
+                    )
+                );
+
+
+                window.location.href =
+                    "main.html";
+            };
+
+
+        // ==========================================================
+        // SERVER REQUEST
+        // ==========================================================
+
+        async function postJson(
+            path,
+            body
+        ) {
+
+            try {
+
+                const response =
+                    await fetch(
+                        path,
+                        {
+
+                            method:
+                                "POST",
+
+                            headers:
+                                {
+                                    "Content-Type":
+                                        "application/json"
+                                },
+
+                            body:
+                                JSON.stringify(
+                                    body
+                                )
+
+                        }
+                    );
+
+
+                const data =
+                    await response.json();
+
+
+                if (
+                    !response.ok
+                ) {
+
+                    return {
+
+                        ok:
+                            false,
+
+                        message:
+                            data.message ||
+                            "Something went wrong."
+
+                    };
+                }
+
+
+                return {
+
+                    ok:
+                        true,
+
+                    data:
+                        data
+
+                };
+
+            } catch (error) {
+
+                console.error(
+                    "Server request failed:",
+                    error
+                );
+
+
+                return {
+
+                    ok:
+                        false,
+
+                    message:
+                        "Could not connect to the Dragon Queue server."
+
+                };
+            }
+        }
+
+    </script>
+
+</body>
+
+</html>
