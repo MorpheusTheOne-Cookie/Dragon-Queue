@@ -207,3 +207,6 @@ ON DUPLICATE KEY UPDATE
     rule_order = VALUES(rule_order);
 
 UPDATE users SET title = 'temp_admin' WHERE username = 'Dragons';
+
+-- UPDATE rules SET rule_key = 'Equipment-care' WHERE rule_key = 'house-hello';
+-- UPDATE rules SET body = 'Please do not break the Pool Cues, Table Tennis paddles, or any other equipment. pls' WHERE rule_key = 'Equipment-care';
