@@ -2,11 +2,11 @@
 
 
 -- ------------------------------------------------------------
--- Database
+-- Database Creation
 -- ------------------------------------------------------------
-CREATE DATABASE IF NOT EXISTS dragon_queue;
+-- CREATE DATABASE IF NOT EXISTS dragon_queue;
 
-USE dragon_queue;
+-- USE dragon_queue;
 
 -- ------------------------------------------------------------
 -- Users
