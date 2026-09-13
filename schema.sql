@@ -166,16 +166,16 @@ VALUES (
         4
     ),
     (
-        'house-hello',
+        'Equipment-care',
         'House Rules',
-        'Hellow.',
+        'Please do not break the Pool Cues, Table Tennis paddles, or any other equipment. pls',
         1,
         5
     ),
     (
         'pool-winner-stays',
         'Pool Table Rules',
-        'Winner stays on for a maximum of two games.',
+        'Winner stays on for as long as they keep winning, loser goes to the back of the queue.',
         2,
         1
     ),
@@ -189,7 +189,7 @@ VALUES (
     (
         'tennis-scoring',
         'Table Tennis Rules',
-        'Games are first to 11 points, win by two.',
+        'Games are first to 11 points, win by two. cap at 15 points. or first to 21 points cap at 25.',
         3,
         1
     ),
