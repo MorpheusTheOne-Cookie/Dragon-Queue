@@ -154,6 +154,9 @@ app.get("/api/health", async (req, res) => {
         await db.query("SELECT 1");
         res.json({ message: "Dragon Queue server and database are running." });
     } catch (error) {
+
+        console.error("Database health check failed:", error.message);
+
         res.status(503).json({ message: "The database is not available." });
     }
 });
@@ -231,6 +234,35 @@ app.post("/api/logout", async (req, res) => {
     if (token) await db.query("DELETE FROM user_sessions WHERE token_hash = ?", [hashToken(token)]).catch(() => {});
     res.setHeader("Set-Cookie", clearSessionCookie());
     res.json({ ok: true });
+});
+
+// ==========================================================
+// DATABASE TEST
+// ==========================================================
+
+app.get("/api/db-test", async (req, res) => {
+    try {
+        const [result] = await db.query(
+            "SELECT 1 AS connected"
+        );
+
+        res.json({
+            message:
+                "Dragon Queue database connected successfully!",
+            result: result
+        });
+
+    } catch (error) {
+        console.error(
+            "Database connection error:",
+            error.message
+        );
+
+        res.status(500).json({
+            message:
+                "Could not connect to the database."
+        });
+    }
 });
 
 // ==========================================================
