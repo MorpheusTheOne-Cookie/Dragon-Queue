@@ -95,7 +95,7 @@ function publicUser(user) {
         username: user.username,
         email: user.email,
         title: user.title,
-        role: user.role || "student"
+        role: user.title
     };
 }
 
@@ -116,11 +116,9 @@ async function requireUser(req, res, next) {
         if (!token) return res.status(401).json({ message: "Please log in again." });
 
         const [rows] = await db.query(
-            `SELECT u.id, u.username, u.email, u.title,
-                    COALESCE(r.role, 'student') AS role
+            `SELECT u.id, u.username, u.email, u.title
              FROM user_sessions s
              JOIN users u ON u.id = s.user_id
-             LEFT JOIN user_roles r ON r.user_id = u.id
              WHERE s.token_hash = ? AND s.expires_at > NOW()
              LIMIT 1`,
             [hashToken(token)]
@@ -133,13 +131,14 @@ async function requireUser(req, res, next) {
 
         req.user = rows[0];
         next();
+
     } catch (error) {
         sendDatabaseError(res, "Session check error:", error, "Your login could not be checked.");
     }
 }
 
 function requireQueueAdmin(req, res, next) {
-    if (!["main_admin", "temp_admin"].includes(req.user.role)) {
+    if (!["main_admin", "temp_admin"].includes(req.user.title)) {
         return res.status(403).json({ message: "Only an admin can manage queues and results." });
     }
     next();
@@ -177,11 +176,7 @@ app.post("/api/login", loginLimiter, async (req, res) => {
     try {
         if (mode === "login") {
             const [users] = await db.query(
-                `SELECT u.id, u.username, u.email, u.title, u.password_hash,
-                        COALESCE(r.role, 'student') AS role
-                 FROM users u LEFT JOIN user_roles r ON r.user_id = u.id
-                 WHERE u.email = ? LIMIT 1`,
-                [email]
+                `SELECT id, username, email, title, password_hash FROM users WHERE email = ? LIMIT 1`, [email]
             );
             if (users.length === 0 || !verifyPassword(password, users[0].password_hash)) {
                 return res.status(401).json({ message: "Email or password is incorrect." });
@@ -205,16 +200,14 @@ app.post("/api/login", loginLimiter, async (req, res) => {
         try {
             await connection.beginTransaction();
             const [result] = await connection.query(
-                "INSERT INTO users (username, email, password_hash, title) VALUES (?, ?, ?, 'Student')",
+                "INSERT INTO users (username, email, password_hash, title) VALUES (?, ?, ?, 'student')",
                 [username, email, hashPassword(password)]
             );
-            await connection.query(
-                "INSERT INTO user_roles (user_id, role) VALUES (?, 'student')",
-                [result.insertId]
-            );
+
+            
             await connection.commit();
             await createSession(res, result.insertId);
-            return res.status(201).json({ id: result.insertId, username, email, title: "Student", role: "student" });
+            return res.status(201).json({ id: result.insertId, username, email, title: "student", role: "student" });
         } catch (error) {
             await connection.rollback();
             throw error;
@@ -231,7 +224,7 @@ app.get("/api/me", requireUser, (req, res) => res.json(publicUser(req.user)));
 
 app.post("/api/logout", async (req, res) => {
     const token = readCookie(req, COOKIE_NAME);
-    if (token) await db.query("DELETE FROM user_sessions WHERE token_hash = ?", [hashToken(token)]).catch(() => {});
+    if (token) await db.query("DELETE FROM user_sessions WHERE token_hash = ?", [hashToken(token)]).catch(() => { });
     res.setHeader("Set-Cookie", clearSessionCookie());
     res.json({ ok: true });
 });
@@ -312,7 +305,7 @@ app.get("/api/rules", requireUser, async (req, res) => {
 
 app.get("/api/stats/:userId", requireUser, async (req, res) => {
     const requestedId = Number(req.params.userId);
-    const userId = ["main_admin", "temp_admin"].includes(req.user.role) && requestedId ? requestedId : req.user.id;
+    const userId = ["main_admin", "temp_admin"].includes(req.user.title) && requestedId ? requestedId : req.user.id;
     try {
         const [rows] = await db.query(
             `SELECT COUNT(*) AS played, COALESCE(SUM(m.winner_id = ?), 0) AS wins,
@@ -332,7 +325,7 @@ app.get("/api/stats/:userId", requireUser, async (req, res) => {
 
 app.get("/api/matches/:userId", requireUser, async (req, res) => {
     const requestedId = Number(req.params.userId);
-    const userId = ["main_admin", "temp_admin"].includes(req.user.role) && requestedId ? requestedId : req.user.id;
+    const userId = ["main_admin", "temp_admin"].includes(req.user.title) && requestedId ? requestedId : req.user.id;
     try {
         const [rows] = await db.query(
             `SELECT m.id, s.name AS station, DATE_FORMAT(m.played_on, '%Y-%m-%d') AS played_on,
@@ -360,7 +353,7 @@ app.post("/api/queue/:action", requireUser, async (req, res) => {
     if (!["join", "leave", "send-to-back", "start-playing", "remove"].includes(action) || !stationId) {
         return res.status(400).json({ message: "Invalid queue request." });
     }
-    if (adminAction && !["main_admin", "temp_admin"].includes(req.user.role)) {
+    if (adminAction && !["main_admin", "temp_admin"].includes(req.user.title)) {
         return res.status(403).json({ message: "Only an admin can manage the queue." });
     }
     if (!adminAction && targetUserId !== req.user.id) {

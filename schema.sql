@@ -1,28 +1,54 @@
 
 
 
--- ------------------------------------------------------------
+-- ==========================================================
 -- Database Creation
--- ------------------------------------------------------------
+-- ==========================================================
 -- CREATE DATABASE IF NOT EXISTS dragon_queue;
 
 -- USE dragon_queue;
 
--- ------------------------------------------------------------
+-- ==========================================================
 -- Users
--- ------------------------------------------------------------
+-- ==========================================================
 CREATE TABLE IF NOT EXISTS users (
     id            INT AUTO_INCREMENT PRIMARY KEY,
     username      VARCHAR(50)  NOT NULL UNIQUE,
     email         VARCHAR(150) NOT NULL UNIQUE,
     password_hash VARCHAR(255) NOT NULL,
-    title         VARCHAR(50)  NOT NULL DEFAULT 'Student',
+    title ENUM('student','temp_admin','main_admin') NOT NULL DEFAULT 'student',
     created_at    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
--- ------------------------------------------------------------
+-- ==========================================================
+-- USER SESSIONS
+-- ==========================================================
+
+CREATE TABLE IF NOT EXISTS user_sessions (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+
+    token_hash CHAR(64) NOT NULL UNIQUE,
+
+    user_id INT NOT NULL,
+
+    expires_at DATETIME NOT NULL,
+
+    created_at TIMESTAMP
+        NOT NULL
+        DEFAULT CURRENT_TIMESTAMP,
+
+    KEY session_expiry (
+        expires_at
+    ),
+
+    FOREIGN KEY (user_id)
+        REFERENCES users(id)
+        ON DELETE CASCADE
+);
+
+-- ==========================================================
 -- Stations (the Pool Table and the Table Tennis table)
--- ------------------------------------------------------------
+-- ==========================================================
 CREATE TABLE IF NOT EXISTS stations (
     id                INT AUTO_INCREMENT PRIMARY KEY,
     name              VARCHAR(50) NOT NULL,
@@ -31,9 +57,9 @@ CREATE TABLE IF NOT EXISTS stations (
     current_players   VARCHAR(120) NULL
 );
 
--- ------------------------------------------------------------
+-- ==========================================================
 -- Queue entries (one row per person waiting or playing)
--- ------------------------------------------------------------
+-- ==========================================================
 CREATE TABLE IF NOT EXISTS queue_entries (
     id         INT AUTO_INCREMENT PRIMARY KEY,
     station_id INT NOT NULL,
@@ -46,9 +72,9 @@ CREATE TABLE IF NOT EXISTS queue_entries (
     FOREIGN KEY (user_id)    REFERENCES users(id)    ON DELETE CASCADE
 );
 
--- ------------------------------------------------------------
+-- ==========================================================
 -- Finished games (used for the profile statistics)
--- ------------------------------------------------------------
+-- ==========================================================
 CREATE TABLE IF NOT EXISTS matches (
     id         INT AUTO_INCREMENT PRIMARY KEY,
     station_id INT NOT NULL,
@@ -62,9 +88,9 @@ CREATE TABLE IF NOT EXISTS matches (
     FOREIGN KEY (loser_id)   REFERENCES users(id)    ON DELETE CASCADE
 );
 
--- ------------------------------------------------------------
+-- ==========================================================
 -- Dragon News
--- ------------------------------------------------------------
+-- ==========================================================
 CREATE TABLE IF NOT EXISTS news (
     id         INT AUTO_INCREMENT PRIMARY KEY,
     title      VARCHAR(200) NOT NULL,
@@ -72,9 +98,9 @@ CREATE TABLE IF NOT EXISTS news (
     UNIQUE KEY one_news_item (title, event_date)
 );
 
--- ------------------------------------------------------------
+-- ==========================================================
 -- Rules
--- ------------------------------------------------------------
+-- ==========================================================
 CREATE TABLE IF NOT EXISTS rules (
     id            INT AUTO_INCREMENT PRIMARY KEY,
     rule_key      VARCHAR(80)  NOT NULL UNIQUE,
@@ -193,33 +219,3 @@ ON DUPLICATE KEY UPDATE
 
     rule_order =
         VALUES(rule_order);
-
--- ------------------------------------------------------------
--- Roles (kept separate from users for safer permissions)
--- ------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS user_roles (
-    user_id INT PRIMARY KEY,
-    role ENUM('student', 'temp_admin', 'main_admin') NOT NULL DEFAULT 'student',
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-);
-
-INSERT IGNORE INTO user_roles (user_id, role)
-SELECT id, 'student' FROM users;
-
--- Dragons can manage queues and record results, but cannot manage roles.
-INSERT INTO user_roles (user_id, role)
-SELECT id, 'temp_admin' FROM users WHERE username = 'Dragons'
-ON DUPLICATE KEY UPDATE role = 'temp_admin';
-
--- ------------------------------------------------------------
--- Server-managed login sessions
--- ------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS user_sessions (
-    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    token_hash CHAR(64) NOT NULL UNIQUE,
-    user_id INT NOT NULL,
-    expires_at DATETIME NOT NULL,
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    KEY session_expiry (expires_at),
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-);
