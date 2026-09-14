@@ -180,6 +180,13 @@ VALUES (
         1
     ),
     (
+        '8-ball-break',
+        'Pool Table Rules',
+        'If u get the 8 ball in off break then you win right away',
+        2,
+        2
+    ),
+    (
         'pool-return-equipment',
         'Pool Table Rules',
         'Return all cues and balls when your game ends.',
@@ -198,6 +205,20 @@ VALUES (
         'Table Tennis Rules',
         'Return the paddles and balls when your game ends.',
         3,
+        2
+    ),
+    (
+        '8-ball-pocket',
+        'Bethune Pool Table Rules',
+        'Anytime during the game if the 8 ball enters the wrong hole it doesnt mean u lose, it is ball in hand for the other person, and the 8 ball is placed on the dot (sticker) where the triangle was initially',
+        4,
+        1
+    ),
+    (
+        '8-ball-bank',
+        'Bethune Pool Table Rules',
+        'When all you balls are pocketed and you are on the 8 ball, you perform 3 banks (hitting the 8 ball or cue ball of a wall) which range for 3 of your turns before u can take the ball straight into the pocket.',
+        4,
         2
     )
 ON DUPLICATE KEY UPDATE
