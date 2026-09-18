@@ -137,7 +137,8 @@ function setupLogout() {
     logoutBtn.addEventListener("click", logout);
 }
 
-function logout() {
+async function logout() {
+    await postJson("/api/logout", {});
     localStorage.removeItem("dragon-user");
     window.location.replace("index.html");
 }
@@ -149,41 +150,67 @@ function logout() {
 
 function setupQueueButtons() {
     poolQueueBtn.addEventListener("click", function () {
-        joinOrLeave(poolStationId);
-    });
-
-    tableTennisQueueBtn.addEventListener("click", function () {
-        joinOrLeave(tableTennisStationId);
+        handleStationButton(poolQueueBtn, poolStationId, "Pool Table");
     });
 
     poolViewQueueBtn.addEventListener("click", function () {
-        showFullQueue(poolStationId, "Pool Table");
+        handleStationButton(poolViewQueueBtn, poolStationId, "Pool Table");
+    });
+
+    tableTennisQueueBtn.addEventListener("click", function () {
+        handleStationButton(tableTennisQueueBtn, tableTennisStationId, "Table Tennis");
     });
 
     tableTennisViewQueueBtn.addEventListener("click", function () {
-        showFullQueue(tableTennisStationId, "Table Tennis");
+        handleStationButton(tableTennisViewQueueBtn, tableTennisStationId, "Table Tennis");
     });
 }
 
 
 // ==========================================================
-// JOIN OR LEAVE QUEUE
+// STATION BUTTON ACTIONS
 // ==========================================================
 
-async function joinOrLeave(stationId) {
-    try {
-        const action = isInQueue(stationId, user.id) ? "leave" : "join";
-
-        const saved = await queueAction(action, stationId, user);
-
-        if (!saved) {
-            console.error("The queue change was not saved by the server.");
-        }
-
-        await refresh();
-    } catch (error) {
-        console.error("Queue action failed:", error);
+async function handleStationButton(button, stationId, stationName) {
+    if (button.disabled) {
+        return;
     }
+
+    const action = button.dataset.action || "view";
+
+    if (action === "view") {
+        await showFullQueue(stationId, stationName);
+        return;
+    }
+
+    let result;
+
+    if (["join", "leave", "requeue"].includes(action)) {
+        result = await postJson(`/api/queue/${action}`, { stationId: stationId });
+    } else if (action === "confirm") {
+        result = await postJson("/api/games/availability", {
+            stationId: stationId,
+            available: true
+        });
+    } else if (action === "unavailable") {
+        result = await postJson("/api/games/availability", {
+            stationId: stationId,
+            available: false
+        });
+    } else if (action === "win" || action === "loss") {
+        result = await postJson("/api/games/result", {
+            stationId: stationId,
+            result: action
+        });
+    } else {
+        return;
+    }
+
+    if (!result.ok) {
+        window.alert(result.message || "That action could not be completed.");
+    }
+
+    await refresh();
 }
 
 
@@ -217,20 +244,35 @@ async function showFullQueue(stationId, stationName) {
 
 function drawFullQueue(people) {
     const queueList = document.getElementById("queue-list");
+    const visiblePeople = people.filter(function (person) {
+        return person.status !== "postgame";
+    });
 
     queueList.replaceChildren();
 
-    if (people.length === 0) {
+    if (visiblePeople.length === 0) {
         const message = document.createElement("p");
         message.textContent = "Nobody is waiting yet.";
         queueList.appendChild(message);
         return;
     }
 
-    people.forEach(function (person, index) {
-        const queueItem = document.createElement("p");
+    let waitingPosition = 0;
 
-        queueItem.textContent = `${index + 1}. ${person.username} (${person.status})`;
+    visiblePeople.forEach(function (person) {
+        const queueItem = document.createElement("p");
+        let statusText = "";
+
+        if (person.status === "playing") {
+            statusText = "Playing now";
+        } else if (person.status === "called") {
+            statusText = "Called - confirming availability";
+        } else {
+            waitingPosition += 1;
+            statusText = `${ordinal(waitingPosition)} waiting`;
+        }
+
+        queueItem.textContent = `${person.username} - ${statusText}`;
 
         if (isSamePerson(person, user.id)) {
             queueItem.textContent += " - you";
@@ -286,13 +328,12 @@ async function refresh() {
 
 async function refreshLoop() {
     await refresh();
-
     setTimeout(refreshLoop, 5000);
 }
 
 
 // ==========================================================
-// ORDINAL NUMBERS
+// DISPLAY HELPERS
 // ==========================================================
 
 function ordinal(number) {
@@ -304,19 +345,78 @@ function ordinal(number) {
 
     const lastDigit = number % 10;
 
-    if (lastDigit === 1) {
-        return `${number}st`;
-    }
-
-    if (lastDigit === 2) {
-        return `${number}nd`;
-    }
-
-    if (lastDigit === 3) {
-        return `${number}rd`;
-    }
+    if (lastDigit === 1) return `${number}st`;
+    if (lastDigit === 2) return `${number}nd`;
+    if (lastDigit === 3) return `${number}rd`;
 
     return `${number}th`;
+}
+
+function formatCountdown(seconds) {
+    const safeSeconds = Math.max(0, Number(seconds) || 0);
+    const minutes = Math.floor(safeSeconds / 60);
+    const remainingSeconds = safeSeconds % 60;
+
+    return `${minutes}:${String(remainingSeconds).padStart(2, "0")}`;
+}
+
+function queueEntryFor(stationId, userId) {
+    return queueFor(stationId).find(function (person) {
+        return isSamePerson(person, userId);
+    }) || null;
+}
+
+function gameIncludesUser(game, userId) {
+    if (!game) {
+        return false;
+    }
+
+    return Number(game.player_a_id) === Number(userId) ||
+        Number(game.player_b_id) === Number(userId);
+}
+
+function userConfirmedForGame(game, userId) {
+    if (!game) {
+        return false;
+    }
+
+    if (Number(game.player_a_id) === Number(userId)) {
+        return Boolean(game.player_a_confirmed);
+    }
+
+    if (Number(game.player_b_id) === Number(userId)) {
+        return Boolean(game.player_b_confirmed);
+    }
+
+    return false;
+}
+
+function userResultForGame(game, userId) {
+    if (!game) {
+        return "";
+    }
+
+    if (Number(game.player_a_id) === Number(userId)) {
+        return game.player_a_result || "";
+    }
+
+    if (Number(game.player_b_id) === Number(userId)) {
+        return game.player_b_result || "";
+    }
+
+    return "";
+}
+
+function opponentNameForGame(game, userId) {
+    if (!game) {
+        return "your opponent";
+    }
+
+    if (Number(game.player_a_id) === Number(userId)) {
+        return game.player_b_username || "your opponent";
+    }
+
+    return game.player_a_username || "your opponent";
 }
 
 
@@ -327,25 +427,32 @@ function ordinal(number) {
 function drawStation(stationId, prefix) {
     const station = stationById(stationId);
     const people = queueFor(stationId);
+    const game = gameFor(stationId);
+    const userEntry = queueEntryFor(stationId, user.id);
+    const waiting = people.filter(function (person) {
+        return person.status === "waiting";
+    });
 
     if (!station) {
         console.error(`Station ${stationId} not found.`);
         return;
     }
 
-    // ------------------------------------------------------
-    // Who is playing right now
-    // ------------------------------------------------------
-    const playing = people.find(function (person) {
-        return person.status === "playing";
-    });
-
     let currentText = "Nobody is playing";
 
-    if (playing) {
-        currentText = `Now playing: ${playing.username}`;
-    } else if (station.current_players) {
-        currentText = `Now playing: ${station.current_players}`;
+    if (game && game.status === "playing") {
+        currentText = `Now playing: ${game.player_a_username} vs ${game.player_b_username}`;
+    } else if (game && game.status === "confirming") {
+        const playerAEntry = queueEntryFor(stationId, game.player_a_id);
+        const winnerIsStaying = playerAEntry && playerAEntry.status === "playing";
+
+        if (winnerIsStaying) {
+            currentText = `Winner stays: ${game.player_a_username} • ${game.player_b_username} confirming`;
+        } else {
+            currentText = `Up next: ${game.player_a_username} vs ${game.player_b_username} • confirming`;
+        }
+    } else if (game && game.status === "waiting_for_opponent") {
+        currentText = `Winner stays: ${game.player_a_username} • waiting for challenger`;
     }
 
     const currentPlayerElement = document.getElementById(`${prefix}-current-player`);
@@ -354,44 +461,130 @@ function drawStation(stationId, prefix) {
         currentPlayerElement.textContent = currentText;
     }
 
-    // ------------------------------------------------------
-    // How many people are in the queue
-    // ------------------------------------------------------
-    document.getElementById(`${prefix}-waiting`).textContent = people.length;
-
-    // ------------------------------------------------------
-    // Where the signed-in player is standing
-    // ------------------------------------------------------
-
-    const userIndex = people.findIndex(function (person) {
-        return isSamePerson(person, user.id);
-    });
+    document.getElementById(`${prefix}-waiting`).textContent = waiting.length;
 
     const positionElement = document.getElementById(`${prefix}-position`);
     const waitElement = document.getElementById(`${prefix}-est-wait`);
 
-    if (userIndex !== -1) {
-        positionElement.textContent = ordinal(userIndex + 1);
+    if (userEntry && userEntry.status === "waiting") {
+        const waitingIndex = waiting.findIndex(function (person) {
+            return isSamePerson(person, user.id);
+        });
+        const activeGameAhead = game && ["confirming", "playing"].includes(game.status) ? 1 : 0;
 
-        waitElement.textContent = `${userIndex * station.avg_game_minutes} min`;
+        positionElement.textContent = ordinal(waitingIndex + 1);
+        waitElement.textContent = `${(waitingIndex + activeGameAhead) * station.avg_game_minutes} min`;
+    } else if (userEntry && userEntry.status === "called") {
+        positionElement.textContent = "Up Next";
+        waitElement.textContent = "0 min";
+    } else if (userEntry && userEntry.status === "playing") {
+        positionElement.textContent = game && game.status === "playing" ? "Playing" : "Stays";
+        waitElement.textContent = "0 min";
+    } else if (userEntry && userEntry.status === "postgame") {
+        positionElement.textContent = "Finished";
+        waitElement.textContent = "-";
     } else {
+        const activeGameAhead = game && ["confirming", "playing"].includes(game.status) ? 1 : 0;
+
         positionElement.textContent = "-";
-
-        waitElement.textContent = `${people.length * station.avg_game_minutes} min`;
+        waitElement.textContent = `${(waiting.length + activeGameAhead) * station.avg_game_minutes} min`;
     }
 
-    // ------------------------------------------------------
-    // Join or Leave button
-    // ------------------------------------------------------
-    const button = prefix === "pool" ? poolQueueBtn : tableTennisQueueBtn;
+    configureStationButtons(stationId, prefix, userEntry, game);
+}
 
-    if (isInQueue(stationId, user.id)) {
-        button.textContent = "Leave Queue";
-        button.classList.add("leave");
-    } else {
-        button.textContent = "Join Queue";
-        button.classList.remove("leave");
+
+// ==========================================================
+// DYNAMIC STATION BUTTONS
+// ==========================================================
+
+function configureStationButtons(stationId, prefix, userEntry, game) {
+    const primaryButton = prefix === "pool" ? poolQueueBtn : tableTennisQueueBtn;
+    const secondaryButton = prefix === "pool" ? poolViewQueueBtn : tableTennisViewQueueBtn;
+
+    resetStationButton(primaryButton);
+    resetStationButton(secondaryButton);
+
+    if (!userEntry) {
+        setStationButton(primaryButton, "Join Queue", "join");
+        setStationButton(secondaryButton, "View Queue", "view", "ghost");
+        return;
     }
+
+    if (userEntry.status === "waiting") {
+        setStationButton(primaryButton, "Leave Queue", "leave", "leave");
+        setStationButton(secondaryButton, "View Queue", "view", "ghost");
+        return;
+    }
+
+    if (userEntry.status === "called") {
+        const confirmed = userConfirmedForGame(game, user.id);
+
+        if (confirmed) {
+            setStationButton(primaryButton, "Confirmed ✓", "none", "action-confirmed", true);
+            setStationButton(secondaryButton, "Leave Queue", "leave", "action-loss");
+        } else {
+            setStationButton(primaryButton, "Confirm Available", "confirm", "action-confirm");
+            setStationButton(secondaryButton, "Can't Play", "unavailable", "action-loss");
+        }
+
+        return;
+    }
+
+    if (userEntry.status === "playing") {
+        if (game && game.status === "playing" && gameIncludesUser(game, user.id)) {
+            const selectedResult = userResultForGame(game, user.id);
+
+            setStationButton(
+                primaryButton,
+                selectedResult === "win" ? "Win ✓" : "Win",
+                "win",
+                selectedResult === "win" ? "action-win result-selected" : "action-win"
+            );
+
+            setStationButton(
+                secondaryButton,
+                selectedResult === "loss" ? "Loss ✓" : "Loss",
+                "loss",
+                selectedResult === "loss" ? "action-loss result-selected" : "action-loss"
+            );
+        } else {
+            setStationButton(primaryButton, "Leave Table", "leave", "leave");
+            setStationButton(secondaryButton, "View Queue", "view", "ghost");
+        }
+
+        return;
+    }
+
+    if (userEntry.status === "postgame") {
+        setStationButton(primaryButton, "Requeue", "requeue", "action-requeue");
+        setStationButton(secondaryButton, "Leave Queue", "leave", "action-loss");
+    }
+}
+
+function resetStationButton(button) {
+    button.disabled = false;
+    button.dataset.action = "";
+    button.classList.remove(
+        "leave",
+        "action-win",
+        "action-loss",
+        "action-confirm",
+        "action-confirmed",
+        "action-requeue",
+        "result-selected",
+        "ghost"
+    );
+}
+
+function setStationButton(button, text, action, classes = "", disabled = false) {
+    button.textContent = text;
+    button.dataset.action = action;
+    button.disabled = disabled;
+
+    classes.split(" ").filter(Boolean).forEach(function (className) {
+        button.classList.add(className);
+    });
 }
 
 
@@ -418,9 +611,6 @@ function drawNews() {
         newsList.appendChild(newsItem);
     });
 
-    // ------------------------------------------------------
-    // Orange strip at the top of the dashboard
-    // ------------------------------------------------------
     const noticeText = document.getElementById("notice-text");
 
     if (!serverIsOnline) {
@@ -499,19 +689,72 @@ function drawTurnBanner() {
     const banner = document.getElementById("turn-banner");
     const turnText = document.getElementById("turn-text");
 
-    let message = "";
+    const stationStates = [
+        stationTurnState(poolStationId, "Pool Table"),
+        stationTurnState(tableTennisStationId, "Table Tennis")
+    ].filter(Boolean);
 
-    if (isNext(poolStationId, user.id)) {
-        message = "You are next on the Pool Table.";
-    } else if (isNext(tableTennisStationId, user.id)) {
-        message = "You are next on Table Tennis.";
-    }
-
-    if (message === "") {
+    if (stationStates.length === 0) {
         banner.classList.add("hidden-dashboard");
         return;
     }
 
+    stationStates.sort(function (a, b) {
+        return b.priority - a.priority;
+    });
+
     banner.classList.remove("hidden-dashboard");
-    turnText.textContent = message;
+    turnText.textContent = stationStates[0].message;
+}
+
+function stationTurnState(stationId, stationName) {
+    const entry = queueEntryFor(stationId, user.id);
+    const game = gameFor(stationId);
+
+    if (!entry) {
+        return null;
+    }
+
+    if (entry.status === "playing" && game && game.status === "playing" && gameIncludesUser(game, user.id)) {
+        return {
+            priority: 4,
+            message: `Your ${stationName} game against ${opponentNameForGame(game, user.id)} is live. Choose Win or Loss when the game ends.`
+        };
+    }
+
+    if (entry.status === "called" && game && game.status === "confirming") {
+        const confirmed = userConfirmedForGame(game, user.id);
+
+        if (confirmed) {
+            return {
+                priority: 3,
+                message: `You confirmed for ${stationName}. Waiting for ${opponentNameForGame(game, user.id)} to confirm.`
+            };
+        }
+
+        return {
+            priority: 3,
+            message: `Your ${stationName} turn is ready. Confirm availability within ${formatCountdown(game.confirmation_seconds_left)} or your turn will be skipped.`
+        };
+    }
+
+    if (entry.status === "postgame") {
+        return {
+            priority: 2,
+            message: `Your ${stationName} game is recorded. Choose Requeue to go to the back, or Leave Queue.`
+        };
+    }
+
+    if (entry.status === "playing" && game && game.status !== "playing") {
+        const message = game.status === "waiting_for_opponent"
+            ? `You won on ${stationName}. Winner stays, and you are waiting for the next challenger.`
+            : `You won on ${stationName}. Winner stays while the next challenger confirms.`;
+
+        return {
+            priority: 1,
+            message: message
+        };
+    }
+
+    return null;
 }

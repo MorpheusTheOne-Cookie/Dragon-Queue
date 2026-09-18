@@ -52,12 +52,29 @@ CREATE TABLE IF NOT EXISTS queue_entries (
     id INT AUTO_INCREMENT PRIMARY KEY,
     station_id INT NOT NULL,
     user_id INT NOT NULL,
-    status ENUM('waiting', 'playing') NOT NULL DEFAULT 'waiting',
+    status ENUM('waiting', 'called', 'playing', 'postgame') NOT NULL DEFAULT 'waiting',
     joined_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     UNIQUE KEY one_place_per_station (station_id, user_id),
     KEY queue_order (station_id, status, joined_at),
     FOREIGN KEY (station_id) REFERENCES stations (id) ON DELETE CASCADE,
     FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS active_games (
+    station_id INT PRIMARY KEY,
+    player_a_id INT NOT NULL,
+    player_b_id INT NULL,
+    status ENUM('waiting_for_opponent', 'confirming', 'playing') NOT NULL DEFAULT 'confirming',
+    player_a_confirmed TINYINT(1) NOT NULL DEFAULT 0,
+    player_b_confirmed TINYINT(1) NOT NULL DEFAULT 0,
+    player_a_result ENUM('win', 'loss') NULL,
+    player_b_result ENUM('win', 'loss') NULL,
+    confirmation_deadline DATETIME NULL,
+    started_at DATETIME NULL,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (station_id) REFERENCES stations (id) ON DELETE CASCADE,
+    FOREIGN KEY (player_a_id) REFERENCES users (id) ON DELETE CASCADE,
+    FOREIGN KEY (player_b_id) REFERENCES users (id) ON DELETE CASCADE
 );
 
 -- ==========================================================

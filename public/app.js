@@ -34,6 +34,13 @@ let queues = {
 
 
 // ==========================================================
+// ACTIVE GAMES
+// ==========================================================
+
+let games = {};
+
+
+// ==========================================================
 // NEWS
 // ==========================================================
 
@@ -84,7 +91,7 @@ async function getJson(path) {
     }
 }
 
-async function sendJson(path, body) {
+async function postJson(path, body) {
     try {
         const response = await fetch(path, {
             method: "POST",
@@ -92,10 +99,33 @@ async function sendJson(path, body) {
             body: JSON.stringify(body)
         });
 
-        return response.ok;
+        let data = {};
+
+        try {
+            data = await response.json();
+        } catch (error) {
+            data = {};
+        }
+
+        return {
+            ok: response.ok,
+            status: response.status,
+            data: data,
+            message: data.message || ""
+        };
     } catch (error) {
-        return false;
+        return {
+            ok: false,
+            status: 0,
+            data: {},
+            message: "Could not reach the Dragon Queue server."
+        };
     }
+}
+
+async function sendJson(path, body) {
+    const result = await postJson(path, body);
+    return result.ok;
 }
 
 
@@ -104,6 +134,10 @@ async function sendJson(path, body) {
 // ==========================================================
 
 async function loadData() {
+    // Load games first because this endpoint also clears expired
+    // 10-minute confirmation windows before the queue is drawn.
+    const serverGames = await getJson("/api/games");
+
     const [serverStations, serverQueue, serverNews, serverRules] = await Promise.all([
         getJson("/api/stations"),
         getJson("/api/queue"),
@@ -130,6 +164,14 @@ async function loadData() {
             }
 
             queues[entry.station_id].push(entry);
+        });
+    }
+
+    if (serverGames !== null) {
+        games = {};
+
+        serverGames.forEach(function (game) {
+            games[game.station_id] = game;
         });
     }
 
@@ -176,6 +218,10 @@ function stationBySlug(slug) {
 
 function queueFor(stationId) {
     return queues[stationId] || [];
+}
+
+function gameFor(stationId) {
+    return games[stationId] || null;
 }
 
 

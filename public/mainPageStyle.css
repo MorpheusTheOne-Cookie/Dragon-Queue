@@ -648,3 +648,54 @@ button.leave {
         padding: 20px;
     }
 }
+/* ==========================================================
+   PLAYER MATCH ACTIONS
+   ========================================================== */
+
+.pool-table-queue-button button.action-win,
+.table-tennis-queue-button button.action-win {
+    background: linear-gradient(135deg, #39a96b, #237a4a) !important;
+    color: #fff !important;
+    border: 0 !important;
+}
+
+.pool-table-queue-button button.action-loss,
+.table-tennis-queue-button button.action-loss {
+    background: linear-gradient(135deg, #e2584a, #b3271a) !important;
+    color: #fff !important;
+    border: 0 !important;
+}
+
+.pool-table-queue-button button.action-confirm,
+.table-tennis-queue-button button.action-confirm {
+    background: linear-gradient(135deg, #39a96b, #237a4a) !important;
+    color: #fff !important;
+    border: 0 !important;
+}
+
+.pool-table-queue-button button.action-requeue,
+.table-tennis-queue-button button.action-requeue {
+    background: linear-gradient(135deg, #7b61ff, #5536c7) !important;
+    color: #fff !important;
+    border: 0 !important;
+}
+
+.pool-table-queue-button button.action-confirmed,
+.table-tennis-queue-button button.action-confirmed {
+    background: #e8f5ee !important;
+    color: #237a4a !important;
+    border: 1px solid #b9dfca !important;
+    cursor: default;
+}
+
+.pool-table-queue-button button.result-selected,
+.table-tennis-queue-button button.result-selected {
+    outline: 3px solid rgba(16, 24, 40, 0.16);
+    outline-offset: 2px;
+}
+
+.pool-table-queue-button button:disabled,
+.table-tennis-queue-button button:disabled {
+    transform: none;
+    opacity: 0.9;
+}

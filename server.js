@@ -132,13 +132,6 @@ async function requireUser(req, res, next) {
     }
 }
 
-function requireQueueAdmin(req, res, next) {
-    if (!["main_admin", "temp_admin"].includes(req.user.title)) {
-        return res.status(403).json({ message: "Only an admin can manage queues and results." });
-    }
-    next();
-}
-
 // ==========================================================
 // HEALTH, LOGIN AND LOGOUT
 // ==========================================================
@@ -268,6 +261,313 @@ app.get("/api/db-test", async (req, res) => {
 });
 
 // ==========================================================
+// GAME / QUEUE HELPERS
+// ==========================================================
+
+const CONFIRMATION_MINUTES = 10;
+
+async function getActiveGame(connection, stationId) {
+    const [rows] = await connection.query(
+        "SELECT * FROM active_games WHERE station_id = ? FOR UPDATE",
+        [stationId]
+    );
+
+    return rows[0] || null;
+}
+
+async function getWaitingPlayers(connection, stationId, excludedUserIds = []) {
+    const parameters = [stationId];
+    let sql = `SELECT id, user_id, joined_at
+               FROM queue_entries
+               WHERE station_id = ? AND status = 'waiting'`;
+
+    if (excludedUserIds.length > 0) {
+        sql += ` AND user_id NOT IN (${excludedUserIds.map(() => "?").join(", ")})`;
+        parameters.push(...excludedUserIds);
+    }
+
+    sql += " ORDER BY joined_at ASC, id ASC FOR UPDATE";
+
+    const [rows] = await connection.query(sql, parameters);
+    return rows;
+}
+
+async function scheduleStation(connection, stationId) {
+    const game = await getActiveGame(connection, stationId);
+
+    if (!game) {
+        const waiting = await getWaitingPlayers(connection, stationId);
+
+        if (waiting.length < 2) {
+            return;
+        }
+
+        const playerA = waiting[0].user_id;
+        const playerB = waiting[1].user_id;
+
+        await connection.query(
+            "UPDATE queue_entries SET status = 'called' WHERE station_id = ? AND user_id IN (?, ?)",
+            [stationId, playerA, playerB]
+        );
+
+        await connection.query(
+            `INSERT INTO active_games (
+                station_id,
+                player_a_id,
+                player_b_id,
+                status,
+                player_a_confirmed,
+                player_b_confirmed,
+                confirmation_deadline
+             ) VALUES (?, ?, ?, 'confirming', 0, 0, DATE_ADD(NOW(), INTERVAL ${CONFIRMATION_MINUTES} MINUTE))`,
+            [stationId, playerA, playerB]
+        );
+
+        return;
+    }
+
+    if (game.status !== "waiting_for_opponent") {
+        return;
+    }
+
+    const waiting = await getWaitingPlayers(connection, stationId, [game.player_a_id]);
+
+    if (waiting.length === 0) {
+        return;
+    }
+
+    const challengerId = waiting[0].user_id;
+
+    await connection.query(
+        "UPDATE queue_entries SET status = 'called' WHERE station_id = ? AND user_id = ?",
+        [stationId, challengerId]
+    );
+
+    await connection.query(
+        `UPDATE active_games
+         SET player_b_id = ?,
+             status = 'confirming',
+             player_a_confirmed = 1,
+             player_b_confirmed = 0,
+             player_a_result = NULL,
+             player_b_result = NULL,
+             confirmation_deadline = DATE_ADD(NOW(), INTERVAL ${CONFIRMATION_MINUTES} MINUTE),
+             started_at = NULL
+         WHERE station_id = ?`,
+        [challengerId, stationId]
+    );
+}
+
+async function expireConfirmationForStation(stationId) {
+    const connection = await db.getConnection();
+
+    try {
+        await connection.beginTransaction();
+
+        const game = await getActiveGame(connection, stationId);
+
+        if (!game || game.status !== "confirming" || !game.confirmation_deadline) {
+            await connection.commit();
+            return;
+        }
+
+        const [deadlineRows] = await connection.query(
+            "SELECT confirmation_deadline <= NOW() AS expired FROM active_games WHERE station_id = ?",
+            [stationId]
+        );
+
+        if (!deadlineRows[0] || !toNumber(deadlineRows[0].expired)) {
+            await connection.commit();
+            return;
+        }
+
+        const unconfirmedIds = [];
+        const confirmed = [];
+
+        if (game.player_a_id) {
+            if (toNumber(game.player_a_confirmed)) {
+                confirmed.push(game.player_a_id);
+            } else {
+                unconfirmedIds.push(game.player_a_id);
+            }
+        }
+
+        if (game.player_b_id) {
+            if (toNumber(game.player_b_confirmed)) {
+                confirmed.push(game.player_b_id);
+            } else {
+                unconfirmedIds.push(game.player_b_id);
+            }
+        }
+
+        for (const userId of unconfirmedIds) {
+            await connection.query(
+                `UPDATE queue_entries
+                 SET status = 'waiting', joined_at = CURRENT_TIMESTAMP
+                 WHERE station_id = ? AND user_id = ?`,
+                [stationId, userId]
+            );
+        }
+
+        if (confirmed.length === 0) {
+            await connection.query("DELETE FROM active_games WHERE station_id = ?", [stationId]);
+            await scheduleStation(connection, stationId);
+            await connection.commit();
+            return;
+        }
+
+        const keeperId = confirmed[0];
+        const [keeperRows] = await connection.query(
+            "SELECT status FROM queue_entries WHERE station_id = ? AND user_id = ? FOR UPDATE",
+            [stationId, keeperId]
+        );
+        const keeperStatus = keeperRows[0] ? keeperRows[0].status : "waiting";
+        const waiting = await getWaitingPlayers(connection, stationId, [keeperId]);
+
+        if (waiting.length > 0) {
+            const challengerId = waiting[0].user_id;
+
+            await connection.query(
+                "UPDATE queue_entries SET status = 'called' WHERE station_id = ? AND user_id = ?",
+                [stationId, challengerId]
+            );
+
+            if (keeperStatus !== "playing") {
+                await connection.query(
+                    "UPDATE queue_entries SET status = 'called' WHERE station_id = ? AND user_id = ?",
+                    [stationId, keeperId]
+                );
+            }
+
+            await connection.query(
+                `UPDATE active_games
+                 SET player_a_id = ?,
+                     player_b_id = ?,
+                     status = 'confirming',
+                     player_a_confirmed = 1,
+                     player_b_confirmed = 0,
+                     player_a_result = NULL,
+                     player_b_result = NULL,
+                     confirmation_deadline = DATE_ADD(NOW(), INTERVAL ${CONFIRMATION_MINUTES} MINUTE),
+                     started_at = NULL
+                 WHERE station_id = ?`,
+                [keeperId, challengerId, stationId]
+            );
+        } else if (keeperStatus === "playing") {
+            await connection.query(
+                `UPDATE active_games
+                 SET player_a_id = ?,
+                     player_b_id = NULL,
+                     status = 'waiting_for_opponent',
+                     player_a_confirmed = 1,
+                     player_b_confirmed = 0,
+                     player_a_result = NULL,
+                     player_b_result = NULL,
+                     confirmation_deadline = NULL,
+                     started_at = NULL
+                 WHERE station_id = ?`,
+                [keeperId, stationId]
+            );
+        } else {
+            await connection.query(
+                "UPDATE queue_entries SET status = 'waiting' WHERE station_id = ? AND user_id = ?",
+                [stationId, keeperId]
+            );
+            await connection.query("DELETE FROM active_games WHERE station_id = ?", [stationId]);
+        }
+
+        await connection.commit();
+    } catch (error) {
+        await connection.rollback();
+        throw error;
+    } finally {
+        connection.release();
+    }
+}
+
+async function processExpiredConfirmations() {
+    const [rows] = await db.query(
+        `SELECT station_id
+         FROM active_games
+         WHERE status = 'confirming'
+           AND confirmation_deadline IS NOT NULL
+           AND confirmation_deadline <= NOW()`
+    );
+
+    for (const row of rows) {
+        await expireConfirmationForStation(row.station_id);
+    }
+}
+
+async function ensureStationsScheduled() {
+    const [stations] = await db.query("SELECT id FROM stations ORDER BY id");
+
+    for (const station of stations) {
+        const connection = await db.getConnection();
+
+        try {
+            await connection.beginTransaction();
+            await scheduleStation(connection, station.id);
+            await connection.commit();
+        } catch (error) {
+            await connection.rollback();
+            throw error;
+        } finally {
+            connection.release();
+        }
+    }
+}
+
+async function removePlayerFromActiveGame(connection, stationId, userId) {
+    const game = await getActiveGame(connection, stationId);
+
+    if (!game || (Number(game.player_a_id) !== Number(userId) && Number(game.player_b_id) !== Number(userId))) {
+        return;
+    }
+
+    if (game.status === "playing") {
+        throw new Error("ACTIVE_GAME_IN_PROGRESS");
+    }
+
+    const otherId = Number(game.player_a_id) === Number(userId)
+        ? game.player_b_id
+        : game.player_a_id;
+
+    if (otherId) {
+        const [otherRows] = await connection.query(
+            "SELECT status FROM queue_entries WHERE station_id = ? AND user_id = ? FOR UPDATE",
+            [stationId, otherId]
+        );
+
+        if (otherRows[0] && otherRows[0].status === "playing") {
+            await connection.query(
+                `UPDATE active_games
+                 SET player_a_id = ?,
+                     player_b_id = NULL,
+                     status = 'waiting_for_opponent',
+                     player_a_confirmed = 1,
+                     player_b_confirmed = 0,
+                     player_a_result = NULL,
+                     player_b_result = NULL,
+                     confirmation_deadline = NULL,
+                     started_at = NULL
+                 WHERE station_id = ?`,
+                [otherId, stationId]
+            );
+            return;
+        }
+
+        await connection.query(
+            "UPDATE queue_entries SET status = 'waiting' WHERE station_id = ? AND user_id = ?",
+            [stationId, otherId]
+        );
+    }
+
+    await connection.query("DELETE FROM active_games WHERE station_id = ?", [stationId]);
+    await scheduleStation(connection, stationId);
+}
+
+// ==========================================================
 // SHARED DATA
 // ==========================================================
 
@@ -282,12 +582,55 @@ app.get("/api/queue", requireUser, async (req, res) => {
     try {
         const [rows] = await db.query(
             `SELECT q.id, q.station_id, q.user_id, q.status, q.joined_at, u.username
-             FROM queue_entries q JOIN users u ON u.id = q.user_id
-             WHERE q.status IN ('waiting', 'playing')
-             ORDER BY (q.status = 'playing') DESC, q.joined_at ASC, q.id ASC`
+             FROM queue_entries q
+             JOIN users u ON u.id = q.user_id
+             WHERE q.status IN ('waiting', 'called', 'playing', 'postgame')
+             ORDER BY q.station_id,
+                      FIELD(q.status, 'playing', 'called', 'waiting', 'postgame'),
+                      q.joined_at ASC,
+                      q.id ASC`
         );
         res.json(rows);
     } catch (error) { sendDatabaseError(res, "Queue query error:", error, "The queue could not be loaded."); }
+});
+
+app.get("/api/games", requireUser, async (req, res) => {
+    try {
+        await processExpiredConfirmations();
+        await ensureStationsScheduled();
+
+        const [rows] = await db.query(
+            `SELECT g.station_id,
+                    g.status,
+                    g.player_a_id,
+                    player_a.username AS player_a_username,
+                    g.player_b_id,
+                    player_b.username AS player_b_username,
+                    g.player_a_confirmed,
+                    g.player_b_confirmed,
+                    g.player_a_result,
+                    g.player_b_result,
+                    g.confirmation_deadline,
+                    g.started_at,
+                    CASE
+                        WHEN g.confirmation_deadline IS NULL THEN NULL
+                        ELSE GREATEST(TIMESTAMPDIFF(SECOND, NOW(), g.confirmation_deadline), 0)
+                    END AS confirmation_seconds_left
+             FROM active_games g
+             JOIN users player_a ON player_a.id = g.player_a_id
+             LEFT JOIN users player_b ON player_b.id = g.player_b_id
+             ORDER BY g.station_id`
+        );
+
+        res.json(rows.map((row) => ({
+            ...row,
+            player_a_confirmed: Boolean(toNumber(row.player_a_confirmed)),
+            player_b_confirmed: Boolean(toNumber(row.player_b_confirmed)),
+            confirmation_seconds_left: row.confirmation_seconds_left === null
+                ? null
+                : toNumber(row.confirmation_seconds_left)
+        })));
+    } catch (error) { sendDatabaseError(res, "Game query error:", error, "Current games could not be loaded."); }
 });
 
 app.get("/api/news", requireUser, async (req, res) => {
@@ -356,84 +699,401 @@ app.get("/api/matches/:userId", requireUser, async (req, res) => {
 app.post("/api/queue/:action", requireUser, async (req, res) => {
     const action = req.params.action;
     const stationId = Number(req.body.stationId);
-    const targetUserId = Number(req.body.userId) || req.user.id;
-    const adminAction = ["send-to-back", "start-playing", "remove"].includes(action);
 
-    if (!["join", "leave", "send-to-back", "start-playing", "remove"].includes(action) || !stationId) {
+    if (!["join", "leave", "requeue"].includes(action) || !stationId) {
         return res.status(400).json({ message: "Invalid queue request." });
-    }
-    if (adminAction && !["main_admin", "temp_admin"].includes(req.user.title)) {
-        return res.status(403).json({ message: "Only an admin can manage the queue." });
-    }
-    if (!adminAction && targetUserId !== req.user.id) {
-        return res.status(403).json({ message: "You can only change your own queue place." });
-    }
-
-    try {
-        const [stations] = await db.query("SELECT id FROM stations WHERE id = ?", [stationId]);
-        if (stations.length === 0) return res.status(404).json({ message: "That game table no longer exists." });
-
-        if (action === "join") {
-            await db.query(
-                `INSERT INTO queue_entries (station_id, user_id, status)
-                 VALUES (?, ?, 'waiting')
-                 ON DUPLICATE KEY UPDATE status = IF(status = 'playing', status, 'waiting')`,
-                [stationId, req.user.id]
-            );
-        } else if (action === "leave" || action === "remove") {
-            await db.query("DELETE FROM queue_entries WHERE station_id = ? AND user_id = ?", [stationId, targetUserId]);
-        } else if (action === "send-to-back") {
-            await db.query(
-                "UPDATE queue_entries SET joined_at = CURRENT_TIMESTAMP, status = 'waiting' WHERE station_id = ? AND user_id = ?",
-                [stationId, targetUserId]
-            );
-        } else if (action === "start-playing") {
-            const connection = await db.getConnection();
-            try {
-                await connection.beginTransaction();
-                await connection.query("UPDATE queue_entries SET status = 'waiting' WHERE station_id = ? AND status = 'playing'", [stationId]);
-                const [result] = await connection.query(
-                    "UPDATE queue_entries SET status = 'playing' WHERE station_id = ? AND user_id = ?",
-                    [stationId, targetUserId]
-                );
-                if (result.affectedRows === 0) throw new Error("Player is not in this queue.");
-                await connection.commit();
-            } catch (error) {
-                await connection.rollback();
-                throw error;
-            } finally { connection.release(); }
-        }
-        res.json({ ok: true });
-    } catch (error) { sendDatabaseError(res, "Queue update error:", error, "The queue could not be updated."); }
-});
-
-app.post("/api/matches", requireUser, requireQueueAdmin, async (req, res) => {
-    const stationId = Number(req.body.stationId);
-    const winnerId = Number(req.body.winnerId);
-    const loserId = Number(req.body.loserId);
-    if (!stationId || !winnerId || !loserId || winnerId === loserId) {
-        return res.status(400).json({ message: "Choose two different players and a game table." });
     }
 
     const connection = await db.getConnection();
+
     try {
         await connection.beginTransaction();
-        const [players] = await connection.query(
-            "SELECT user_id FROM queue_entries WHERE station_id = ? AND user_id IN (?, ?) FOR UPDATE",
+
+        const [stations] = await connection.query("SELECT id FROM stations WHERE id = ? FOR UPDATE", [stationId]);
+        if (stations.length === 0) {
+            await connection.rollback();
+            return res.status(404).json({ message: "That game table no longer exists." });
+        }
+
+        const [entries] = await connection.query(
+            "SELECT id, status FROM queue_entries WHERE station_id = ? AND user_id = ? FOR UPDATE",
+            [stationId, req.user.id]
+        );
+        const entry = entries[0] || null;
+
+        if (action === "join") {
+            if (!entry) {
+                await connection.query(
+                    "INSERT INTO queue_entries (station_id, user_id, status) VALUES (?, ?, 'waiting')",
+                    [stationId, req.user.id]
+                );
+            } else if (entry.status === "postgame") {
+                await connection.query(
+                    "UPDATE queue_entries SET status = 'waiting', joined_at = CURRENT_TIMESTAMP WHERE station_id = ? AND user_id = ?",
+                    [stationId, req.user.id]
+                );
+            }
+
+            await scheduleStation(connection, stationId);
+        }
+
+        if (action === "requeue") {
+            if (!entry || entry.status !== "postgame") {
+                await connection.rollback();
+                return res.status(400).json({ message: "You can only requeue after your game has finished." });
+            }
+
+            await connection.query(
+                "UPDATE queue_entries SET status = 'waiting', joined_at = CURRENT_TIMESTAMP WHERE station_id = ? AND user_id = ?",
+                [stationId, req.user.id]
+            );
+
+            await scheduleStation(connection, stationId);
+        }
+
+        if (action === "leave") {
+            if (!entry) {
+                await connection.commit();
+                return res.json({ ok: true });
+            }
+
+            if (entry.status === "playing") {
+                const game = await getActiveGame(connection, stationId);
+
+                if (game && game.status === "playing") {
+                    await connection.rollback();
+                    return res.status(409).json({ message: "Finish the current game and submit Win or Loss before leaving." });
+                }
+            }
+
+            await removePlayerFromActiveGame(connection, stationId, req.user.id);
+            await connection.query(
+                "DELETE FROM queue_entries WHERE station_id = ? AND user_id = ?",
+                [stationId, req.user.id]
+            );
+            await scheduleStation(connection, stationId);
+        }
+
+        await connection.commit();
+        res.json({ ok: true });
+    } catch (error) {
+        await connection.rollback();
+
+        if (error.message === "ACTIVE_GAME_IN_PROGRESS") {
+            return res.status(409).json({ message: "Finish the current game and submit Win or Loss before leaving." });
+        }
+
+        sendDatabaseError(res, "Queue update error:", error, "The queue could not be updated.");
+    } finally {
+        connection.release();
+    }
+});
+
+// ==========================================================
+// PLAYER AVAILABILITY
+// ==========================================================
+
+app.post("/api/games/availability", requireUser, async (req, res) => {
+    const stationId = Number(req.body.stationId);
+    const available = req.body.available === true;
+
+    if (!stationId) {
+        return res.status(400).json({ message: "Choose a valid game table." });
+    }
+
+    await processExpiredConfirmations().catch(() => { });
+
+    const connection = await db.getConnection();
+
+    try {
+        await connection.beginTransaction();
+
+        const game = await getActiveGame(connection, stationId);
+
+        if (!game || game.status !== "confirming") {
+            await connection.rollback();
+            return res.status(409).json({ message: "This game is no longer waiting for confirmation." });
+        }
+
+        const isPlayerA = Number(game.player_a_id) === Number(req.user.id);
+        const isPlayerB = Number(game.player_b_id) === Number(req.user.id);
+
+        if (!isPlayerA && !isPlayerB) {
+            await connection.rollback();
+            return res.status(403).json({ message: "You are not one of the players called for this game." });
+        }
+
+        const alreadyConfirmed = isPlayerA
+            ? Boolean(toNumber(game.player_a_confirmed))
+            : Boolean(toNumber(game.player_b_confirmed));
+
+        if (alreadyConfirmed && !available) {
+            await connection.rollback();
+            return res.status(409).json({ message: "You already confirmed that you are available." });
+        }
+
+        if (!available) {
+            const otherId = isPlayerA ? game.player_b_id : game.player_a_id;
+            const otherConfirmed = isPlayerA
+                ? Boolean(toNumber(game.player_b_confirmed))
+                : Boolean(toNumber(game.player_a_confirmed));
+
+            await connection.query(
+                `UPDATE queue_entries
+                 SET status = 'waiting', joined_at = CURRENT_TIMESTAMP
+                 WHERE station_id = ? AND user_id = ?`,
+                [stationId, req.user.id]
+            );
+
+            const [otherRows] = await connection.query(
+                "SELECT status FROM queue_entries WHERE station_id = ? AND user_id = ? FOR UPDATE",
+                [stationId, otherId]
+            );
+            const otherStatus = otherRows[0] ? otherRows[0].status : "waiting";
+            const waiting = await getWaitingPlayers(connection, stationId, [otherId, req.user.id]);
+
+            if (waiting.length > 0) {
+                const replacementId = waiting[0].user_id;
+
+                await connection.query(
+                    "UPDATE queue_entries SET status = 'called' WHERE station_id = ? AND user_id = ?",
+                    [stationId, replacementId]
+                );
+
+                if (otherStatus !== "playing") {
+                    await connection.query(
+                        "UPDATE queue_entries SET status = 'called' WHERE station_id = ? AND user_id = ?",
+                        [stationId, otherId]
+                    );
+                }
+
+                await connection.query(
+                    `UPDATE active_games
+                     SET player_a_id = ?,
+                         player_b_id = ?,
+                         status = 'confirming',
+                         player_a_confirmed = ?,
+                         player_b_confirmed = 0,
+                         player_a_result = NULL,
+                         player_b_result = NULL,
+                         confirmation_deadline = DATE_ADD(NOW(), INTERVAL ${CONFIRMATION_MINUTES} MINUTE),
+                         started_at = NULL
+                     WHERE station_id = ?`,
+                    [otherId, replacementId, otherConfirmed ? 1 : 0, stationId]
+                );
+            } else if (otherStatus === "playing") {
+                await connection.query(
+                    `UPDATE active_games
+                     SET player_a_id = ?,
+                         player_b_id = NULL,
+                         status = 'waiting_for_opponent',
+                         player_a_confirmed = 1,
+                         player_b_confirmed = 0,
+                         player_a_result = NULL,
+                         player_b_result = NULL,
+                         confirmation_deadline = NULL,
+                         started_at = NULL
+                     WHERE station_id = ?`,
+                    [otherId, stationId]
+                );
+            } else {
+                await connection.query(
+                    "UPDATE queue_entries SET status = 'waiting' WHERE station_id = ? AND user_id = ?",
+                    [stationId, otherId]
+                );
+                await connection.query("DELETE FROM active_games WHERE station_id = ?", [stationId]);
+            }
+
+            await connection.commit();
+            return res.json({ ok: true, skipped: true });
+        }
+
+        if (isPlayerA) {
+            await connection.query(
+                "UPDATE active_games SET player_a_confirmed = 1 WHERE station_id = ?",
+                [stationId]
+            );
+        } else {
+            await connection.query(
+                "UPDATE active_games SET player_b_confirmed = 1 WHERE station_id = ?",
+                [stationId]
+            );
+        }
+
+        const [updatedRows] = await connection.query(
+            "SELECT player_a_id, player_b_id, player_a_confirmed, player_b_confirmed FROM active_games WHERE station_id = ? FOR UPDATE",
+            [stationId]
+        );
+        const updated = updatedRows[0];
+
+        if (updated && updated.player_b_id && toNumber(updated.player_a_confirmed) && toNumber(updated.player_b_confirmed)) {
+            await connection.query(
+                `UPDATE active_games
+                 SET status = 'playing', confirmation_deadline = NULL, started_at = NOW()
+                 WHERE station_id = ?`,
+                [stationId]
+            );
+
+            await connection.query(
+                "UPDATE queue_entries SET status = 'playing' WHERE station_id = ? AND user_id IN (?, ?)",
+                [stationId, updated.player_a_id, updated.player_b_id]
+            );
+        }
+
+        await connection.commit();
+        res.json({ ok: true, confirmed: true });
+    } catch (error) {
+        await connection.rollback();
+        sendDatabaseError(res, "Availability update error:", error, "Your availability could not be saved.");
+    } finally {
+        connection.release();
+    }
+});
+
+// ==========================================================
+// MATCH RESULT - WINNER STAYS
+// ==========================================================
+
+app.post("/api/games/result", requireUser, async (req, res) => {
+    const stationId = Number(req.body.stationId);
+    const result = req.body.result === "win" ? "win" : req.body.result === "loss" ? "loss" : "";
+
+    if (!stationId || !result) {
+        return res.status(400).json({ message: "Choose Win or Loss for a valid game table." });
+    }
+
+    const connection = await db.getConnection();
+
+    try {
+        await connection.beginTransaction();
+
+        const game = await getActiveGame(connection, stationId);
+
+        if (!game || game.status !== "playing" || !game.player_b_id) {
+            await connection.rollback();
+            return res.status(409).json({ message: "There is no active two-player game to report." });
+        }
+
+        const isPlayerA = Number(game.player_a_id) === Number(req.user.id);
+        const isPlayerB = Number(game.player_b_id) === Number(req.user.id);
+
+        if (!isPlayerA && !isPlayerB) {
+            await connection.rollback();
+            return res.status(403).json({ message: "Only the two current players can report this result." });
+        }
+
+        const otherResult = isPlayerA ? game.player_b_result : game.player_a_result;
+
+        if (otherResult && otherResult === result) {
+            await connection.rollback();
+            return res.status(409).json({
+                message: result === "win"
+                    ? "Both players cannot report a win. One player must choose Loss."
+                    : "Both players cannot report a loss. One player must choose Win."
+            });
+        }
+
+        if (isPlayerA) {
+            await connection.query(
+                "UPDATE active_games SET player_a_result = ? WHERE station_id = ?",
+                [result, stationId]
+            );
+        } else {
+            await connection.query(
+                "UPDATE active_games SET player_b_result = ? WHERE station_id = ?",
+                [result, stationId]
+            );
+        }
+
+        const [updatedRows] = await connection.query(
+            "SELECT * FROM active_games WHERE station_id = ? FOR UPDATE",
+            [stationId]
+        );
+        const updated = updatedRows[0];
+
+        if (!updated.player_a_result || !updated.player_b_result) {
+            await connection.commit();
+            return res.json({ ok: true, finalized: false, message: "Result saved. Waiting for the other player." });
+        }
+
+        if (updated.player_a_result === updated.player_b_result) {
+            await connection.rollback();
+            return res.status(409).json({ message: "The players must submit opposite results: one Win and one Loss." });
+        }
+
+        const winnerId = updated.player_a_result === "win" ? updated.player_a_id : updated.player_b_id;
+        const loserId = updated.player_a_result === "loss" ? updated.player_a_id : updated.player_b_id;
+
+        await connection.query(
+            "INSERT INTO matches (station_id, winner_id, loser_id) VALUES (?, ?, ?)",
             [stationId, winnerId, loserId]
         );
-        if (players.length !== 2) {
-            await connection.rollback();
-            return res.status(400).json({ message: "Both players must be in this queue." });
+
+        await connection.query(
+            "UPDATE queue_entries SET status = 'playing' WHERE station_id = ? AND user_id = ?",
+            [stationId, winnerId]
+        );
+
+        await connection.query(
+            "UPDATE queue_entries SET status = 'postgame' WHERE station_id = ? AND user_id = ?",
+            [stationId, loserId]
+        );
+
+        const waiting = await getWaitingPlayers(connection, stationId, [winnerId, loserId]);
+
+        if (waiting.length > 0) {
+            const challengerId = waiting[0].user_id;
+
+            await connection.query(
+                "UPDATE queue_entries SET status = 'called' WHERE station_id = ? AND user_id = ?",
+                [stationId, challengerId]
+            );
+
+            await connection.query(
+                `UPDATE active_games
+                 SET player_a_id = ?,
+                     player_b_id = ?,
+                     status = 'confirming',
+                     player_a_confirmed = 1,
+                     player_b_confirmed = 0,
+                     player_a_result = NULL,
+                     player_b_result = NULL,
+                     confirmation_deadline = DATE_ADD(NOW(), INTERVAL ${CONFIRMATION_MINUTES} MINUTE),
+                     started_at = NULL
+                 WHERE station_id = ?`,
+                [winnerId, challengerId, stationId]
+            );
+        } else {
+            await connection.query(
+                `UPDATE active_games
+                 SET player_a_id = ?,
+                     player_b_id = NULL,
+                     status = 'waiting_for_opponent',
+                     player_a_confirmed = 1,
+                     player_b_confirmed = 0,
+                     player_a_result = NULL,
+                     player_b_result = NULL,
+                     confirmation_deadline = NULL,
+                     started_at = NULL
+                 WHERE station_id = ?`,
+                [winnerId, stationId]
+            );
         }
-        await connection.query("INSERT INTO matches (station_id, winner_id, loser_id) VALUES (?, ?, ?)", [stationId, winnerId, loserId]);
-        await connection.query("DELETE FROM queue_entries WHERE station_id = ? AND user_id IN (?, ?)", [stationId, winnerId, loserId]);
+
         await connection.commit();
-        res.status(201).json({ ok: true });
+        res.json({
+            ok: true,
+            finalized: true,
+            winnerId,
+            loserId,
+            outcome: Number(req.user.id) === Number(winnerId) ? "win" : "loss"
+        });
     } catch (error) {
         await connection.rollback();
         sendDatabaseError(res, "Match result error:", error, "The game result could not be recorded.");
-    } finally { connection.release(); }
+    } finally {
+        connection.release();
+    }
 });
 
 app.use("/api", (req, res) => res.status(404).json({ message: "That Dragon Queue address does not exist." }));
@@ -442,4 +1102,16 @@ app.use((error, req, res, next) => {
     if (res.headersSent) return next(error);
     res.status(500).json({ message: "Something unexpected happened. Please try again." });
 });
+
+const confirmationTimer = setInterval(async () => {
+    try {
+        await processExpiredConfirmations();
+        await ensureStationsScheduled();
+    } catch (error) {
+        console.error("Confirmation timer error:", error.message);
+    }
+}, 30000);
+
+confirmationTimer.unref();
+
 app.listen(PORT, "0.0.0.0", () => console.log(`Dragon Queue server is running on port ${PORT}`));
