@@ -39,10 +39,6 @@ function toNumber(value) {
     return Number.isFinite(number) ? number : 0;
 }
 
-function looksLikeEmail(value) {
-    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
-}
-
 function hashPassword(password) {
     const salt = crypto.randomBytes(16).toString("hex");
     const hash = crypto.scryptSync(password, salt, 64).toString("hex");
@@ -93,7 +89,6 @@ function publicUser(user) {
     return {
         id: user.id,
         username: user.username,
-        email: user.email,
         title: user.title,
         role: user.title
     };
@@ -116,7 +111,7 @@ async function requireUser(req, res, next) {
         if (!token) return res.status(401).json({ message: "Please log in again." });
 
         const [rows] = await db.query(
-            `SELECT u.id, u.username, u.email, u.title
+            `SELECT u.id, u.username, u.title
              FROM user_sessions s
              JOIN users u ON u.id = s.user_id
              WHERE s.token_hash = ? AND s.expires_at > NOW()
@@ -162,52 +157,63 @@ app.get("/api/health", async (req, res) => {
 
 app.post("/api/login", loginLimiter, async (req, res) => {
     const username = String(req.body.username || "").trim();
-    const email = String(req.body.email || "").trim().toLowerCase();
     const password = String(req.body.password || "");
     const mode = req.body.mode === "login" ? "login" : "register";
 
-    if (!looksLikeEmail(email) || password.length < 8 || password.length > 128) {
-        return res.status(400).json({ message: "Enter a valid email and a password of 8 to 128 characters." });
+    // Username is now the only account identifier.
+    if (username.length < 2 || username.length > 50) {
+        return res.status(400).json({ message: "Enter a username between 2 and 50 characters." });
     }
-    if (mode === "register" && (username.length < 2 || username.length > 50)) {
-        return res.status(400).json({ message: "Choose a username between 2 and 50 characters." });
+
+    if (password.length < 8 || password.length > 128) {
+        return res.status(400).json({ message: "Enter a password of 8 to 128 characters." });
     }
 
     try {
         if (mode === "login") {
             const [users] = await db.query(
-                `SELECT id, username, email, title, password_hash FROM users WHERE email = ? LIMIT 1`, [email]
+                `SELECT id, username, title, password_hash
+                 FROM users
+                 WHERE username = ?
+                 LIMIT 1`,
+                [username]
             );
+
             if (users.length === 0 || !verifyPassword(password, users[0].password_hash)) {
-                return res.status(401).json({ message: "Email or password is incorrect." });
+                return res.status(401).json({ message: "Username or password is incorrect." });
             }
+
             await createSession(res, users[0].id);
             return res.json(publicUser(users[0]));
         }
 
         const [existing] = await db.query(
-            "SELECT id, email FROM users WHERE email = ? OR username = ? LIMIT 1",
-            [email, username]
+            "SELECT id FROM users WHERE username = ? LIMIT 1",
+            [username]
         );
+
         if (existing.length > 0) {
-            const message = existing[0].email === email
-                ? "An account already uses this email address."
-                : "That username is already taken.";
-            return res.status(409).json({ message });
+            return res.status(409).json({ message: "That username is already taken." });
         }
 
         const connection = await db.getConnection();
         try {
             await connection.beginTransaction();
+
             const [result] = await connection.query(
-                "INSERT INTO users (username, email, password_hash, title) VALUES (?, ?, ?, 'student')",
-                [username, email, hashPassword(password)]
+                "INSERT INTO users (username, password_hash, title) VALUES (?, ?, 'student')",
+                [username, hashPassword(password)]
             );
 
-            
             await connection.commit();
             await createSession(res, result.insertId);
-            return res.status(201).json({ id: result.insertId, username, email, title: "student", role: "student" });
+
+            return res.status(201).json({
+                id: result.insertId,
+                username,
+                title: "student",
+                role: "student"
+            });
         } catch (error) {
             await connection.rollback();
             throw error;
@@ -215,7 +221,10 @@ app.post("/api/login", loginLimiter, async (req, res) => {
             connection.release();
         }
     } catch (error) {
-        if (error.code === "ER_DUP_ENTRY") return res.status(409).json({ message: "That email or username is already taken." });
+        if (error.code === "ER_DUP_ENTRY") {
+            return res.status(409).json({ message: "That username is already taken." });
+        }
+
         sendDatabaseError(res, "Login/register error:", error, "The account could not be processed.");
     }
 });

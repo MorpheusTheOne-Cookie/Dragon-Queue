@@ -100,7 +100,7 @@ form p a{
 }
 
 .input-group{
-    height: 280px;
+    min-height: 150px;
 }
 
 .btn-field button.disable{
