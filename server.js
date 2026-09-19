@@ -310,6 +310,132 @@ app.get("/api/admin/me", requireAdmin, (req, res) => {
     res.json(publicUser(req.user));
 });
 
+// Goal 3: one protected, read-only endpoint for the admin dashboard.
+// It returns the current station, game and queue state but does not modify anything
+// other than the normal queue scheduler/expired-confirmation housekeeping that the
+// student dashboard already performs when it reads current games.
+app.get("/api/admin/dashboard", requireAdmin, async (req, res) => {
+    try {
+        // Keep the data current before we show it to an administrator.
+        await processExpiredConfirmations();
+        await ensureStationsScheduled();
+
+        const [stations] = await db.query(
+            `SELECT id, name, slug, avg_game_minutes
+             FROM stations
+             ORDER BY id`
+        );
+
+        const [games] = await db.query(
+            `SELECT g.station_id,
+                    g.status,
+                    g.player_a_id,
+                    player_a.username AS player_a_username,
+                    g.player_b_id,
+                    player_b.username AS player_b_username,
+                    g.player_a_confirmed,
+                    g.player_b_confirmed,
+                    g.player_a_result,
+                    g.player_b_result,
+                    g.confirmation_deadline,
+                    g.started_at,
+                    CASE
+                        WHEN g.confirmation_deadline IS NULL THEN NULL
+                        ELSE GREATEST(TIMESTAMPDIFF(SECOND, NOW(), g.confirmation_deadline), 0)
+                    END AS confirmation_seconds_left
+             FROM active_games g
+             JOIN users player_a ON player_a.id = g.player_a_id
+             LEFT JOIN users player_b ON player_b.id = g.player_b_id
+             ORDER BY g.station_id`
+        );
+
+        const [queueEntries] = await db.query(
+            `SELECT q.id, q.station_id, q.user_id, q.status, q.joined_at, u.username
+             FROM queue_entries q
+             JOIN users u ON u.id = q.user_id
+             WHERE q.status IN ('waiting', 'called', 'playing', 'postgame')
+             ORDER BY q.station_id,
+                      FIELD(q.status, 'playing', 'called', 'waiting', 'postgame'),
+                      q.joined_at ASC,
+                      q.id ASC`
+        );
+
+        const gameByStation = new Map();
+
+        for (const row of games) {
+            gameByStation.set(toNumber(row.station_id), {
+                station_id: toNumber(row.station_id),
+                status: row.status,
+                player_a_id: toNumber(row.player_a_id),
+                player_a_username: row.player_a_username,
+                player_b_id: row.player_b_id === null ? null : toNumber(row.player_b_id),
+                player_b_username: row.player_b_username || null,
+                player_a_confirmed: Boolean(toNumber(row.player_a_confirmed)),
+                player_b_confirmed: Boolean(toNumber(row.player_b_confirmed)),
+                player_a_result: row.player_a_result || null,
+                player_b_result: row.player_b_result || null,
+                confirmation_deadline: row.confirmation_deadline || null,
+                started_at: row.started_at || null,
+                confirmation_seconds_left: row.confirmation_seconds_left === null
+                    ? null
+                    : toNumber(row.confirmation_seconds_left)
+            });
+        }
+
+        const stationData = stations.map((station) => {
+            const stationId = toNumber(station.id);
+            const game = gameByStation.get(stationId) || null;
+            const playerIds = new Set();
+
+            if (game) {
+                if (game.player_a_id) playerIds.add(game.player_a_id);
+                if (game.player_b_id) playerIds.add(game.player_b_id);
+            }
+
+            // Current/called players already appear in the match panel, so do not
+            // duplicate them in the waiting-list portion of the admin dashboard.
+            const queue = queueEntries
+                .filter((entry) => toNumber(entry.station_id) === stationId)
+                .filter((entry) => !playerIds.has(toNumber(entry.user_id)))
+                .map((entry) => ({
+                    id: toNumber(entry.id),
+                    user_id: toNumber(entry.user_id),
+                    username: entry.username,
+                    status: entry.status,
+                    joined_at: entry.joined_at
+                }));
+
+            const waitingCount = queueEntries.filter((entry) =>
+                toNumber(entry.station_id) === stationId && entry.status === "waiting"
+            ).length;
+
+            return {
+                id: stationId,
+                name: station.name,
+                slug: station.slug,
+                avg_game_minutes: toNumber(station.avg_game_minutes) || 10,
+                waiting_count: waitingCount,
+                game,
+                queue
+            };
+        });
+
+        res.json({
+            admin: publicUser(req.user),
+            refreshed_at: new Date().toISOString(),
+            stations: stationData
+        });
+
+    } catch (error) {
+        sendDatabaseError(
+            res,
+            "Admin dashboard query error:",
+            error,
+            "The admin dashboard could not be loaded."
+        );
+    }
+});
+
 app.get("/admin", requireAdminPage, (req, res) => {
     res.sendFile(path.join(__dirname, "private", "admin.html"));
 });
