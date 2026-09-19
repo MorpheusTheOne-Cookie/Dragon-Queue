@@ -310,6 +310,288 @@ app.get("/api/admin/me", requireAdmin, (req, res) => {
     res.json(publicUser(req.user));
 });
 
+// ==========================================================
+// GOAL 4 - ADMIN QUEUE CONTROLS
+// ==========================================================
+// These routes are intentionally limited to day-to-day queue management.
+// Match overrides/resets belong to Goal 5 and station open/close controls
+// belong to Goal 6.
+
+app.post("/api/admin/queue/confirm", requireAdmin, async (req, res) => {
+    const stationId = Number(req.body.stationId);
+    const userId = Number(req.body.userId);
+
+    if (!stationId || !userId) {
+        return res.status(400).json({ message: "Choose a valid station and player." });
+    }
+
+    await processExpiredConfirmations().catch(() => { });
+
+    const connection = await db.getConnection();
+
+    try {
+        await connection.beginTransaction();
+
+        const game = await getActiveGame(connection, stationId);
+
+        if (!game || game.status !== "confirming") {
+            await connection.rollback();
+            return res.status(409).json({ message: "This station is not waiting for player confirmation." });
+        }
+
+        const isPlayerA = Number(game.player_a_id) === userId;
+        const isPlayerB = Number(game.player_b_id) === userId;
+
+        if (!isPlayerA && !isPlayerB) {
+            await connection.rollback();
+            return res.status(409).json({ message: "That player is no longer one of the players being called." });
+        }
+
+        if (isPlayerA && toNumber(game.player_a_confirmed)) {
+            await connection.commit();
+            return res.json({ ok: true, alreadyConfirmed: true });
+        }
+
+        if (isPlayerB && toNumber(game.player_b_confirmed)) {
+            await connection.commit();
+            return res.json({ ok: true, alreadyConfirmed: true });
+        }
+
+        if (isPlayerA) {
+            await connection.query(
+                "UPDATE active_games SET player_a_confirmed = 1 WHERE station_id = ?",
+                [stationId]
+            );
+        } else {
+            await connection.query(
+                "UPDATE active_games SET player_b_confirmed = 1 WHERE station_id = ?",
+                [stationId]
+            );
+        }
+
+        const [updatedRows] = await connection.query(
+            `SELECT player_a_id, player_b_id, player_a_confirmed, player_b_confirmed
+             FROM active_games
+             WHERE station_id = ?
+             FOR UPDATE`,
+            [stationId]
+        );
+        const updated = updatedRows[0];
+
+        // If both players are now confirmed, immediately start the match just as
+        // the normal player confirmation route does.
+        if (updated && updated.player_b_id && toNumber(updated.player_a_confirmed) && toNumber(updated.player_b_confirmed)) {
+            await connection.query(
+                `UPDATE active_games
+                 SET status = 'playing', confirmation_deadline = NULL, started_at = NOW()
+                 WHERE station_id = ?`,
+                [stationId]
+            );
+
+            await connection.query(
+                "UPDATE queue_entries SET status = 'playing' WHERE station_id = ? AND user_id IN (?, ?)",
+                [stationId, updated.player_a_id, updated.player_b_id]
+            );
+        }
+
+        await connection.commit();
+        return res.json({ ok: true, confirmed: true });
+
+    } catch (error) {
+        await connection.rollback();
+        sendDatabaseError(res, "Admin confirm-player error:", error, "The player's availability could not be confirmed.");
+    } finally {
+        connection.release();
+    }
+});
+
+app.post("/api/admin/queue/skip", requireAdmin, async (req, res) => {
+    const stationId = Number(req.body.stationId);
+    const userId = Number(req.body.userId);
+
+    if (!stationId || !userId) {
+        return res.status(400).json({ message: "Choose a valid station and player." });
+    }
+
+    await processExpiredConfirmations().catch(() => { });
+
+    const connection = await db.getConnection();
+
+    try {
+        await connection.beginTransaction();
+
+        const game = await getActiveGame(connection, stationId);
+
+        if (!game || game.status !== "confirming") {
+            await connection.rollback();
+            return res.status(409).json({ message: "This station is not waiting for player confirmation." });
+        }
+
+        const isPlayerA = Number(game.player_a_id) === userId;
+        const isPlayerB = Number(game.player_b_id) === userId;
+
+        if (!isPlayerA && !isPlayerB) {
+            await connection.rollback();
+            return res.status(409).json({ message: "That player is no longer one of the players being called." });
+        }
+
+        const targetConfirmed = isPlayerA
+            ? Boolean(toNumber(game.player_a_confirmed))
+            : Boolean(toNumber(game.player_b_confirmed));
+
+        if (targetConfirmed) {
+            await connection.rollback();
+            return res.status(409).json({ message: "That player has already confirmed. Goal 4 only skips unconfirmed players." });
+        }
+
+        // A skipped player is moved to the back of the waiting queue rather than
+        // being deleted. This matches the automatic 10-minute timeout behavior.
+        await connection.query(
+            `UPDATE queue_entries
+             SET status = 'waiting', joined_at = CURRENT_TIMESTAMP
+             WHERE station_id = ? AND user_id = ?`,
+            [stationId, userId]
+        );
+
+        const otherId = isPlayerA ? game.player_b_id : game.player_a_id;
+        const otherConfirmed = isPlayerA
+            ? Boolean(toNumber(game.player_b_confirmed))
+            : Boolean(toNumber(game.player_a_confirmed));
+
+        if (!otherId) {
+            await connection.query("DELETE FROM active_games WHERE station_id = ?", [stationId]);
+            await scheduleStation(connection, stationId);
+            await connection.commit();
+            return res.json({ ok: true, skipped: true });
+        }
+
+        const [otherRows] = await connection.query(
+            "SELECT status FROM queue_entries WHERE station_id = ? AND user_id = ? FOR UPDATE",
+            [stationId, otherId]
+        );
+        const otherStatus = otherRows[0] ? otherRows[0].status : "waiting";
+        const waiting = await getWaitingPlayers(connection, stationId, [otherId, userId]);
+
+        if (waiting.length > 0) {
+            const replacementId = waiting[0].user_id;
+
+            await connection.query(
+                "UPDATE queue_entries SET status = 'called' WHERE station_id = ? AND user_id = ?",
+                [stationId, replacementId]
+            );
+
+            if (otherStatus !== "playing") {
+                await connection.query(
+                    "UPDATE queue_entries SET status = 'called' WHERE station_id = ? AND user_id = ?",
+                    [stationId, otherId]
+                );
+            }
+
+            await connection.query(
+                `UPDATE active_games
+                 SET player_a_id = ?,
+                     player_b_id = ?,
+                     status = 'confirming',
+                     player_a_confirmed = ?,
+                     player_b_confirmed = 0,
+                     player_a_result = NULL,
+                     player_b_result = NULL,
+                     confirmation_deadline = DATE_ADD(NOW(), INTERVAL ${CONFIRMATION_MINUTES} MINUTE),
+                     started_at = NULL
+                 WHERE station_id = ?`,
+                [otherId, replacementId, otherConfirmed ? 1 : 0, stationId]
+            );
+        } else if (otherStatus === "playing") {
+            // This happens when the winner from the previous match is waiting for
+            // a challenger and the newly-called challenger is skipped.
+            await connection.query(
+                `UPDATE active_games
+                 SET player_a_id = ?,
+                     player_b_id = NULL,
+                     status = 'waiting_for_opponent',
+                     player_a_confirmed = 1,
+                     player_b_confirmed = 0,
+                     player_a_result = NULL,
+                     player_b_result = NULL,
+                     confirmation_deadline = NULL,
+                     started_at = NULL
+                 WHERE station_id = ?`,
+                [otherId, stationId]
+            );
+        } else {
+            // Only one available player remains, so return them to the waiting
+            // queue until there are two people to schedule.
+            await connection.query(
+                "UPDATE queue_entries SET status = 'waiting' WHERE station_id = ? AND user_id = ?",
+                [stationId, otherId]
+            );
+            await connection.query("DELETE FROM active_games WHERE station_id = ?", [stationId]);
+        }
+
+        await connection.commit();
+        return res.json({ ok: true, skipped: true });
+
+    } catch (error) {
+        await connection.rollback();
+        sendDatabaseError(res, "Admin skip-player error:", error, "The player could not be skipped.");
+    } finally {
+        connection.release();
+    }
+});
+
+app.post("/api/admin/queue/remove", requireAdmin, async (req, res) => {
+    const stationId = Number(req.body.stationId);
+    const userId = Number(req.body.userId);
+
+    if (!stationId || !userId) {
+        return res.status(400).json({ message: "Choose a valid station and player." });
+    }
+
+    const connection = await db.getConnection();
+
+    try {
+        await connection.beginTransaction();
+
+        const [entries] = await connection.query(
+            `SELECT id, status
+             FROM queue_entries
+             WHERE station_id = ? AND user_id = ?
+             FOR UPDATE`,
+            [stationId, userId]
+        );
+        const entry = entries[0] || null;
+
+        if (!entry) {
+            await connection.rollback();
+            return res.status(404).json({ message: "That player is no longer in this queue." });
+        }
+
+        if (entry.status !== "waiting") {
+            await connection.rollback();
+            return res.status(409).json({
+                message: entry.status === "called"
+                    ? "Use Skip Player for someone who has already been called."
+                    : "Goal 4 only removes players who are currently waiting in the queue."
+            });
+        }
+
+        await connection.query(
+            "DELETE FROM queue_entries WHERE station_id = ? AND user_id = ?",
+            [stationId, userId]
+        );
+
+        await scheduleStation(connection, stationId);
+        await connection.commit();
+        return res.json({ ok: true, removed: true });
+
+    } catch (error) {
+        await connection.rollback();
+        sendDatabaseError(res, "Admin remove-player error:", error, "The player could not be removed from the queue.");
+    } finally {
+        connection.release();
+    }
+});
+
 // Goal 3: one protected, read-only endpoint for the admin dashboard.
 // It returns the current station, game and queue state but does not modify anything
 // other than the normal queue scheduler/expired-confirmation housekeeping that the
