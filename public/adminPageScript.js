@@ -1,5 +1,5 @@
 // ==========================================================
-// DRAGON QUEUE - ADMIN DASHBOARD
+// DRAGON QUEUE - ADMIN DASHBOARD (GOAL 4)
 // ==========================================================
 
 const stationGrid = document.getElementById("station-grid");
@@ -8,12 +8,14 @@ const adminRole = document.getElementById("admin-role");
 const refreshButton = document.getElementById("refresh-btn");
 const logoutButton = document.getElementById("logout-btn");
 const lastUpdated = document.getElementById("last-updated");
+const dashboardMessage = document.getElementById("dashboard-message");
 const dashboardError = document.getElementById("dashboard-error");
 
 const REFRESH_EVERY_MS = 5000;
 let dashboardState = null;
 let nextRefreshTimer = null;
 let countdownTimer = null;
+let actionInProgress = false;
 
 function escapeHtml(value) {
     return String(value ?? "")
@@ -45,6 +47,23 @@ function formatSeconds(totalSeconds) {
     return `${minutes}:${String(seconds).padStart(2, "0")}`;
 }
 
+function showMessage(message) {
+    dashboardError.hidden = true;
+    dashboardMessage.textContent = message;
+    dashboardMessage.hidden = false;
+}
+
+function showError(message) {
+    dashboardMessage.hidden = true;
+    dashboardError.textContent = message;
+    dashboardError.hidden = false;
+}
+
+function clearNotices() {
+    dashboardMessage.hidden = true;
+    dashboardError.hidden = true;
+}
+
 function confirmationBadge(confirmed, gameStatus, result) {
     if (gameStatus === "playing" && result === "win") {
         return '<span class="badge confirmed">Win submitted</span>';
@@ -65,7 +84,36 @@ function confirmationBadge(confirmed, gameStatus, result) {
     return '<span class="badge pending">Waiting</span>';
 }
 
-function playerRow(label, username, confirmed, gameStatus, result) {
+function playerControls(stationId, userId, username, confirmed, gameStatus) {
+    if (!userId || !username || gameStatus !== "confirming" || confirmed) {
+        return "";
+    }
+
+    return `
+        <div class="admin-actions">
+            <button
+                type="button"
+                class="action-button confirm-button"
+                data-admin-action="confirm"
+                data-station-id="${Number(stationId)}"
+                data-user-id="${Number(userId)}"
+                data-username="${escapeHtml(username)}">
+                Confirm
+            </button>
+            <button
+                type="button"
+                class="action-button skip-button"
+                data-admin-action="skip"
+                data-station-id="${Number(stationId)}"
+                data-user-id="${Number(userId)}"
+                data-username="${escapeHtml(username)}">
+                Skip
+            </button>
+        </div>
+    `;
+}
+
+function playerRow(stationId, label, userId, username, confirmed, gameStatus, result) {
     if (!username) {
         return `
             <div class="player-row">
@@ -80,11 +128,14 @@ function playerRow(label, username, confirmed, gameStatus, result) {
 
     return `
         <div class="player-row">
-            <div>
+            <div class="player-info">
                 <div class="player-name">${escapeHtml(username)}</div>
                 <div class="player-side">${escapeHtml(label)}</div>
             </div>
-            ${confirmationBadge(confirmed, gameStatus, result)}
+            <div class="player-state-and-actions">
+                ${confirmationBadge(confirmed, gameStatus, result)}
+                ${playerControls(stationId, userId, username, confirmed, gameStatus)}
+            </div>
         </div>
     `;
 }
@@ -96,7 +147,23 @@ function queueBadge(status) {
     return '<span class="badge waiting">Waiting</span>';
 }
 
-function renderQueue(queue) {
+function queueControls(stationId, entry) {
+    if (entry.status !== "waiting") return "";
+
+    return `
+        <button
+            type="button"
+            class="action-button remove-button"
+            data-admin-action="remove"
+            data-station-id="${Number(stationId)}"
+            data-user-id="${Number(entry.user_id)}"
+            data-username="${escapeHtml(entry.username)}">
+            Remove
+        </button>
+    `;
+}
+
+function renderQueue(stationId, queue) {
     if (!queue.length) {
         return '<p class="queue-empty">Nobody else is waiting.</p>';
     }
@@ -115,7 +182,10 @@ function renderQueue(queue) {
                             <span class="queue-position">${positionText}</span>
                             <span class="queue-name">${escapeHtml(entry.username)}</span>
                         </div>
-                        ${queueBadge(entry.status)}
+                        <div class="queue-state-and-actions">
+                            ${queueBadge(entry.status)}
+                            ${queueControls(stationId, entry)}
+                        </div>
                     </div>
                 `;
             }).join("")}
@@ -143,8 +213,8 @@ function renderStation(station) {
 
     const matchContent = game
         ? `
-            ${playerRow("Player A", game.player_a_username, game.player_a_confirmed, game.status, game.player_a_result)}
-            ${playerRow("Player B", game.player_b_username, game.player_b_confirmed, game.status, game.player_b_result)}
+            ${playerRow(station.id, "Player A", game.player_a_id, game.player_a_username, game.player_a_confirmed, game.status, game.player_a_result)}
+            ${playerRow(station.id, "Player B", game.player_b_id, game.player_b_username, game.player_b_confirmed, game.status, game.player_b_result)}
             ${timerMarkup(game, station.id)}
           `
         : '<p class="match-empty">No game is currently scheduled.</p>';
@@ -173,7 +243,7 @@ function renderStation(station) {
                         <strong>Queue</strong>
                         <span>${station.queue.length} additional ${station.queue.length === 1 ? "person" : "people"}</span>
                     </div>
-                    ${renderQueue(station.queue)}
+                    ${renderQueue(station.id, station.queue)}
                 </section>
             </div>
         </article>
@@ -220,10 +290,12 @@ function tickCountdowns() {
     }
 }
 
-async function loadDashboard() {
+async function loadDashboard({ keepNotice = false } = {}) {
     clearTimeout(nextRefreshTimer);
     refreshButton.disabled = true;
-    dashboardError.hidden = true;
+
+    if (!keepNotice) clearNotices();
+    else dashboardError.hidden = true;
 
     try {
         const response = await fetch("/api/admin/dashboard", {
@@ -245,16 +317,98 @@ async function loadDashboard() {
 
     } catch (error) {
         console.error("Admin dashboard load failed:", error);
-        dashboardError.textContent = error.message || "The admin dashboard could not be loaded.";
-        dashboardError.hidden = false;
+        showError(error.message || "The admin dashboard could not be loaded.");
 
     } finally {
         refreshButton.disabled = false;
-        nextRefreshTimer = setTimeout(loadDashboard, REFRESH_EVERY_MS);
+        nextRefreshTimer = setTimeout(() => loadDashboard(), REFRESH_EVERY_MS);
     }
 }
 
-refreshButton.addEventListener("click", loadDashboard);
+async function performAdminAction(action, stationId, userId, username, button) {
+    if (actionInProgress) return;
+
+    const endpointByAction = {
+        confirm: "/api/admin/queue/confirm",
+        skip: "/api/admin/queue/skip",
+        remove: "/api/admin/queue/remove"
+    };
+
+    const endpoint = endpointByAction[action];
+    if (!endpoint) return;
+
+    actionInProgress = true;
+    clearTimeout(nextRefreshTimer);
+    clearNotices();
+
+    const originalText = button.textContent;
+    button.disabled = true;
+    button.textContent = "Working...";
+
+    try {
+        const response = await fetch(endpoint, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            },
+            body: JSON.stringify({ stationId, userId })
+        });
+
+        if (response.status === 401 || response.status === 403) {
+            if (response.status === 401) {
+                window.location.href = "/admin-login.html";
+                return;
+            }
+        }
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.message || "The admin action could not be completed.");
+        }
+
+        const actionMessage = {
+            confirm: `${username} was confirmed as available.`,
+            skip: `${username} was skipped and moved to the back of the queue.`,
+            remove: `${username} was removed from the waiting queue.`
+        };
+
+        showMessage(actionMessage[action] || "Admin action completed.");
+        await loadDashboard({ keepNotice: true });
+
+    } catch (error) {
+        console.error("Admin queue action failed:", error);
+        showError(error.message || "The admin action could not be completed.");
+        nextRefreshTimer = setTimeout(() => loadDashboard(), REFRESH_EVERY_MS);
+
+    } finally {
+        actionInProgress = false;
+        if (button.isConnected) {
+            button.disabled = false;
+            button.textContent = originalText;
+        }
+    }
+}
+
+stationGrid.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-admin-action]");
+    if (!button) return;
+
+    const action = button.dataset.adminAction;
+    const stationId = Number(button.dataset.stationId);
+    const userId = Number(button.dataset.userId);
+    const username = button.dataset.username || "Player";
+
+    if (!stationId || !userId) {
+        showError("The selected player or station is invalid.");
+        return;
+    }
+
+    performAdminAction(action, stationId, userId, username, button);
+});
+
+refreshButton.addEventListener("click", () => loadDashboard());
 
 logoutButton.addEventListener("click", async function () {
     await fetch("/api/logout", { method: "POST" }).catch(() => {});

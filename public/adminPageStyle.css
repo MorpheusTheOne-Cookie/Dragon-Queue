@@ -430,3 +430,73 @@ h1 {
         flex-direction: column;
     }
 }
+
+/* ==========================================================
+   GOAL 4 - SIMPLE QUEUE CONTROL BUTTONS
+   ========================================================== */
+
+.success-banner {
+    margin-top: 18px;
+    padding: 14px 18px;
+    border-radius: 12px;
+    background: #eaf7ef;
+    border: 1px solid #b9dfc8;
+    color: #176b3d;
+}
+
+.player-state-and-actions,
+.queue-state-and-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.admin-actions {
+    display: flex;
+    gap: 6px;
+}
+
+.action-button {
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: white;
+    color: var(--text);
+    padding: 6px 10px;
+    font-size: 0.76rem;
+    font-weight: 700;
+}
+
+.action-button:hover {
+    background: #f5f7fa;
+}
+
+.action-button:disabled {
+    cursor: wait;
+    opacity: 0.6;
+}
+
+.confirm-button {
+    border-color: #9fd2b5;
+    color: var(--green);
+}
+
+.skip-button,
+.remove-button {
+    border-color: #e3b2ad;
+    color: var(--red);
+}
+
+@media (max-width: 520px) {
+    .player-row,
+    .queue-row {
+        align-items: flex-start;
+    }
+
+    .player-state-and-actions,
+    .queue-state-and-actions {
+        align-items: flex-end;
+        flex-direction: column;
+    }
+}

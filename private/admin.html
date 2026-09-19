@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin Dashboard | Dragon Queue</title>
-    <link rel="stylesheet" href="/adminPageStyle.css?v=3">
+    <link rel="stylesheet" href="/adminPageStyle.css?v=4">
 </head>
 
 <body>
@@ -32,9 +32,9 @@
         <main>
             <section class="overview-bar" aria-label="Admin dashboard status">
                 <div>
-                    <p class="eyebrow">TESTING READ ONLY</p>
-                    <h2>Live station overview</h2>
-                    <p>Watch active games, confirmation timers and queues.</p>
+                    <p class="eyebrow">GOAL 4 · QUEUE CONTROLS</p>
+                    <h2>Live station control</h2>
+                    <p>Confirm or skip called players and remove people who are still waiting.</p>
                 </div>
 
                 <div class="refresh-area">
@@ -43,6 +43,7 @@
                 </div>
             </section>
 
+            <div id="dashboard-message" class="success-banner" role="status" hidden></div>
             <div id="dashboard-error" class="error-banner" role="alert" hidden></div>
 
             <section id="station-grid" class="station-grid" aria-live="polite">
@@ -54,7 +55,7 @@
         </main>
     </div>
 
-    <script src="/adminPageScript.js?v=3"></script>
+    <script src="/adminPageScript.js?v=4"></script>
 </body>
 
 </html>
