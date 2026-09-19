@@ -1,0 +1,4 @@
+1. Make the join and leave queue locked after 12am and active after 8am
+2. Add the admin controls
+3. Add admin assisted pwd reset (optional, look into it)
+to verify the persons identity on registration each person can be given a code to save "DRAGONS-XXXX-XXX" to help with verification

@@ -1,0 +1,3 @@
+"C:\Program Files\MySQL\MySQL Server 8.0\bin\mysqldump.exe" -h HOST -P PORT -u USER -p --single-transaction --no-tablespaces railway > dragon_queue_backup.sql -> Create a backup on the laptop
+
+railway connect MYSQL --tunnel-only -> Open a direct connection to the railway server

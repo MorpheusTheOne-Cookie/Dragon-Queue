@@ -111,3 +111,25 @@ form p a{
 .hidden{
     display: none;
 }
+/* ==========================================================
+   ADMIN LOGIN
+   ========================================================== */
+
+.admin-input-group{
+    min-height: 150px;
+}
+
+.admin-btn-field button{
+    flex-basis: 100%;
+}
+
+.message{
+    min-height: 20px;
+    margin-top: 14px;
+    color: #b42318;
+}
+
+.admin-return-link{
+    margin-top: 16px;
+    text-align: center;
+}

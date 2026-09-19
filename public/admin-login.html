@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Login | Dragon Queue</title>
+    <link rel="stylesheet" href="registerStyle.css">
+    <script src="https://kit.fontawesome.com/61b297af10.js" crossorigin="anonymous"></script>
+</head>
+
+<body>
+    <div class="container">
+        <div class="form-box">
+            <img src="IMG/Bethune Logo-PLACEHOLDER.png" alt="Dragon Queue logo">
+
+            <h1>Admin Login</h1>
+
+            <form id="admin-login-form">
+                <div class="input-group admin-input-group">
+                    <div class="input-field">
+                        <i class="fa-solid fa-user-shield"></i>
+                        <input
+                            type="text"
+                            id="username"
+                            name="username"
+                            placeholder="Admin Username"
+                            autocomplete="username"
+                        >
+                    </div>
+
+                    <div class="input-field">
+                        <i class="fa-solid fa-key"></i>
+                        <input
+                            type="password"
+                            id="password"
+                            name="password"
+                            placeholder="Password"
+                            autocomplete="current-password"
+                        >
+                    </div>
+                </div>
+
+                <div class="btn-field admin-btn-field">
+                    <button type="submit" id="admin-login-btn">Login as Admin</button>
+                </div>
+
+                <p class="message" id="message"></p>
+
+                <p class="admin-return-link">
+                    <a href="/">Return to student login</a>
+                </p>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        const form = document.getElementById("admin-login-form");
+        const usernameInput = document.getElementById("username");
+        const passwordInput = document.getElementById("password");
+        const loginButton = document.getElementById("admin-login-btn");
+        const message = document.getElementById("message");
+
+        form.addEventListener("submit", async function (event) {
+            event.preventDefault();
+
+            const username = usernameInput.value.trim();
+            const password = passwordInput.value;
+
+            message.textContent = "";
+
+            if (username === "" || password === "") {
+                message.textContent = "Please enter your username and password.";
+                return;
+            }
+
+            loginButton.disabled = true;
+            loginButton.textContent = "Checking Access...";
+
+            try {
+                const response = await fetch("/api/admin/login", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({ username, password })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    message.textContent = data.message || "Admin login failed.";
+                    return;
+                }
+
+                localStorage.setItem("dragon-user", JSON.stringify(data));
+                window.location.href = "/admin";
+
+            } catch (error) {
+                console.error("Admin login request failed:", error);
+                message.textContent = "Could not connect to the Dragon Queue server.";
+
+            } finally {
+                loginButton.disabled = false;
+                loginButton.textContent = "Login as Admin";
+            }
+        });
+    </script>
+</body>
+
+</html>

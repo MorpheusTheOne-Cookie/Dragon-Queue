@@ -15,6 +15,7 @@ const app = express();
 const PORT = Number(process.env.PORT) || 3000;
 const COOKIE_NAME = "dragon_session";
 const SESSION_DAYS = 7;
+const ADMIN_ROLES = new Set(["temp_admin", "main_admin"]);
 
 app.set("trust proxy", 1);
 app.use(helmet({ contentSecurityPolicy: false }));
@@ -105,30 +106,72 @@ async function createSession(res, userId) {
     res.setHeader("Set-Cookie", sessionCookie(token));
 }
 
+async function getSessionUser(req) {
+    const token = readCookie(req, COOKIE_NAME);
+    if (!token) return null;
+
+    const [rows] = await db.query(
+        `SELECT u.id, u.username, u.title
+         FROM user_sessions s
+         JOIN users u ON u.id = s.user_id
+         WHERE s.token_hash = ? AND s.expires_at > NOW()
+         LIMIT 1`,
+        [hashToken(token)]
+    );
+
+    return rows[0] || null;
+}
+
+function isAdmin(user) {
+    return Boolean(user && ADMIN_ROLES.has(user.title));
+}
+
 async function requireUser(req, res, next) {
     try {
-        const token = readCookie(req, COOKIE_NAME);
-        if (!token) return res.status(401).json({ message: "Please log in again." });
+        const user = await getSessionUser(req);
 
-        const [rows] = await db.query(
-            `SELECT u.id, u.username, u.title
-             FROM user_sessions s
-             JOIN users u ON u.id = s.user_id
-             WHERE s.token_hash = ? AND s.expires_at > NOW()
-             LIMIT 1`,
-            [hashToken(token)]
-        );
-
-        if (rows.length === 0) {
+        if (!user) {
             res.setHeader("Set-Cookie", clearSessionCookie());
-            return res.status(401).json({ message: "Your login expired. Please log in again." });
+            return res.status(401).json({ message: "Please log in again." });
         }
 
-        req.user = rows[0];
+        req.user = user;
         next();
 
     } catch (error) {
         sendDatabaseError(res, "Session check error:", error, "Your login could not be checked.");
+    }
+}
+
+function requireAdmin(req, res, next) {
+    requireUser(req, res, () => {
+        if (!isAdmin(req.user)) {
+            return res.status(403).json({ message: "Administrator access is required." });
+        }
+
+        next();
+    });
+}
+
+async function requireAdminPage(req, res, next) {
+    try {
+        const user = await getSessionUser(req);
+
+        if (!user) {
+            res.setHeader("Set-Cookie", clearSessionCookie());
+            return res.redirect("/admin-login.html");
+        }
+
+        if (!isAdmin(user)) {
+            return res.redirect("/main.html");
+        }
+
+        req.user = user;
+        next();
+
+    } catch (error) {
+        console.error("Admin page session check error:", error.message);
+        res.status(500).send("The admin session could not be checked.");
     }
 }
 
@@ -220,6 +263,55 @@ app.post("/api/login", loginLimiter, async (req, res) => {
 
         sendDatabaseError(res, "Login/register error:", error, "The account could not be processed.");
     }
+});
+
+// ==========================================================
+// ADMIN LOGIN AND ACCESS
+// ==========================================================
+
+app.post("/api/admin/login", loginLimiter, async (req, res) => {
+    const username = String(req.body.username || "").trim();
+    const password = String(req.body.password || "");
+
+    if (username.length < 2 || username.length > 50) {
+        return res.status(400).json({ message: "Enter your admin username." });
+    }
+
+    if (password.length < 8 || password.length > 128) {
+        return res.status(400).json({ message: "Enter your admin password." });
+    }
+
+    try {
+        const [users] = await db.query(
+            `SELECT id, username, title, password_hash
+             FROM users
+             WHERE username = ?
+             LIMIT 1`,
+            [username]
+        );
+
+        if (users.length === 0 || !verifyPassword(password, users[0].password_hash)) {
+            return res.status(401).json({ message: "Admin username or password is incorrect." });
+        }
+
+        if (!isAdmin(users[0])) {
+            return res.status(403).json({ message: "This account does not have administrator access." });
+        }
+
+        await createSession(res, users[0].id);
+        return res.json(publicUser(users[0]));
+
+    } catch (error) {
+        sendDatabaseError(res, "Admin login error:", error, "The admin login could not be processed.");
+    }
+});
+
+app.get("/api/admin/me", requireAdmin, (req, res) => {
+    res.json(publicUser(req.user));
+});
+
+app.get("/admin", requireAdminPage, (req, res) => {
+    res.sendFile(path.join(__dirname, "private", "admin.html"));
 });
 
 app.get("/api/me", requireUser, (req, res) => res.json(publicUser(req.user)));
